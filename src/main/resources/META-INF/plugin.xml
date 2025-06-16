@@ -8,15 +8,14 @@
     <name>CallHierarchyGraph</name>
 
     <!-- A displayed Vendor name or Organization ID displayed on the Plugins Page. -->
-    <vendor email="support@yourcompany.com" url="https://www.yourcompany.com">YourCompany</vendor>
+    <vendor email="xfqy0617@gmail.com" url="https://www.yourcompany.com">xfqy</vendor>
 
     <!-- Description of the plugin displayed on the Plugin Page and IDE Plugin Manager.
          Simple HTML elements (text formatting, paragraphs, and lists) can be added inside of <![CDATA[ ]]> tag.
          Guidelines: https://plugins.jetbrains.com/docs/marketplace/plugin-overview-page.html#plugin-description -->
-    <description><![CDATA[
-    Enter short description for your plugin here.<br>
-    <em>most HTML tags may be used</em>
-  ]]></description>
+    <description>
+        这是一个基于 Kotlin 开发的调用层次可视化工具，能够解析 IDEA 的 Call Hierarchy，生成交互式的 HTML 调用图。它通过智能解析代码调用关系，以可视化的方式展示函数调用的层次结构，帮助开发者快速理解代码逻辑，提升开发效率。
+    </description>
 
     <!-- Product and plugin compatibility requirements.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
@@ -25,6 +24,18 @@
     <!-- Extension points defined by the plugin.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
-
+<!--        <postStartupActivity implementation="org.xfqy.callhierarchygraph.plugin.CallHierarchyGraphAction"/>-->
+<!--        <applicationService serviceImplementation="_FirstInSuiteTest"/>-->
+        <toolWindow
+                id="CallHierarchyGraph"
+                factoryClass="org.xfqy.callhierarchygraph.plugin.CallHierarchyGraphToolWindow"
+                anchor="right"
+                icon="AllIcons.General.Web"/>
     </extensions>
+
+    <actions>
+        <action id = "CallHierarchyGraph" class="org.xfqy.callhierarchygraph.plugin.CallHierarchyGraphAction" text="Call Hierarchy to HTML">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+    </actions>
 </idea-plugin>
