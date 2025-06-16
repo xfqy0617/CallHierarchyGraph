@@ -1,4 +1,4 @@
-package org.xfqy.graphxfqy.config;
+package org.xfqy.callhierarchygraph.config
 
 /**
  * 图配置类，存储所有可配置的图形参数

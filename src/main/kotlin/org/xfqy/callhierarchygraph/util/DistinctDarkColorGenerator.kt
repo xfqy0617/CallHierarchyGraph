@@ -1,4 +1,4 @@
-package org.xfqy.graphxfqy.util
+package org.xfqy.callhierarchygraph.util
 
 import java.awt.Color
 import kotlin.math.abs

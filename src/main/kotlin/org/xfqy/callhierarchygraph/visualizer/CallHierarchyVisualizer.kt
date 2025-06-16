@@ -1,6 +1,7 @@
-package org.xfqy.graphxfqy.visualizer
+package org.xfqy.callhierarchygraph.visualizer
 
 import com.google.gson.GsonBuilder
+import com.jetbrains.rd.util.string.println
 import guru.nidi.graphviz.attribute.Attributes.attr
 import guru.nidi.graphviz.attribute.Color.named
 import guru.nidi.graphviz.attribute.Font.size
@@ -13,9 +14,9 @@ import guru.nidi.graphviz.model.Factory.mutGraph
 import guru.nidi.graphviz.model.Factory.mutNode
 import guru.nidi.graphviz.model.MutableGraph
 import guru.nidi.graphviz.model.MutableNode
-import org.xfqy.graphxfqy.config.GraphConfig
-import org.xfqy.graphxfqy.manager.NodeManager
-import org.xfqy.graphxfqy.util.Pair
+import org.xfqy.callhierarchygraph.manager.NodeManager
+import org.xfqy.callhierarchygraph.util.Pair
+import org.xfqy.callhierarchygraph.config.GraphConfig
 import java.awt.Desktop
 import java.io.BufferedReader
 import java.io.IOException
@@ -268,12 +269,12 @@ class CallHierarchyVisualizer {
                 // --- 关键修改点 ---
                 // 在 graphviz-java 0.18.1 版本中，toFile() 方法返回的是 File 对象。
                 // 捕获为 File，然后转换为 Path。
-                val renderedFile = Graphviz.fromGraph(graph)
-                    .render(graphvizFormat)
-                    .toFile(outputPath.toFile())
+                var renderer = Graphviz.fromGraph(graph).render(graphvizFormat)
+                val renderedFile = renderer.toFile(outputPath.toFile())
                 val renderedPath = renderedFile.toPath() // 将 File 转换为 Path
 
                 println("图已渲染到 ${renderedPath.toAbsolutePath()}")
+                println(renderer.toString())
 
                 if (view && Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
                     Desktop.getDesktop().open(renderedFile) // Desktop.open 方法接受 File 对象

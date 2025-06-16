@@ -1,8 +1,7 @@
-package org.xfqy.graphxfqy.manager
+package org.xfqy.callhierarchygraph.manager
 
-import org.apache.commons.exec.util.StringUtils
-import org.xfqy.graphxfqy.util.DistinctDarkColorGenerator
-import org.xfqy.graphxfqy.util.Pair
+import org.xfqy.callhierarchygraph.util.DistinctDarkColorGenerator
+import org.xfqy.callhierarchygraph.util.Pair
 import java.util.regex.Pattern
 
 // 预编译正则表达式，用于提取节点标签信息
