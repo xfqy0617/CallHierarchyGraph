@@ -12,14 +12,13 @@ import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindowManager
-import com.intellij.psi.JavaDirectoryService
-import com.intellij.psi.PsiClass
-import com.intellij.psi.PsiJavaFile
-import com.intellij.psi.PsiMethod
+import com.intellij.psi.*
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.ui.content.ContentFactory
+
+// ... other code in your class ...
 
 class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更新了文本
 
@@ -53,6 +52,7 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
         e.presentation.isEnabledAndVisible = psiClass != null && psiClass.methods.isNotEmpty()
     }
 
+
     /**
      * 执行 Action
      */
@@ -60,38 +60,40 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
         val project = e.project ?: return
         val psiElement = e.getData(CommonDataKeys.PSI_ELEMENT) ?: return
 
-        // 确定目标类和可能被预选中的方法
         val targetClass: PsiClass?
         val preselectedMethod: PsiMethod?
 
         when (psiElement) {
             is PsiClass -> {
                 targetClass = psiElement
-                preselectedMethod = null // 在类上点击，没有预选方法
+                preselectedMethod = null
             }
+
             is PsiMethod -> {
                 targetClass = psiElement.containingClass
-                preselectedMethod = psiElement // 在方法上点击，预选此方法
+                preselectedMethod = psiElement
             }
+
             else -> {
-                // 如果在编辑器的其他位置（例如方法体内部），尝试向上查找
                 val method = PsiTreeUtil.getParentOfType(psiElement, PsiMethod::class.java)
                 if (method != null) {
                     targetClass = method.containingClass
                     preselectedMethod = method
                 } else {
-                    // 实在找不到就返回
-                    return
+                    // 如果在方法体外但在类内部，尝试找到类
+                    targetClass = PsiTreeUtil.getParentOfType(psiElement, PsiClass::class.java)
+                    preselectedMethod = null
                 }
             }
         }
 
+        // 如果没有找到一个有效的类作为起点，则不执行任何操作
         if (targetClass == null || targetClass.methods.isEmpty()) {
             return
         }
 
-        // 创建并显示对话框，传入所有方法和预选中的方法
-        val dialog = SelectMethodsDialog(project, targetClass.methods.toList(), preselectedMethod)
+        // [修改] 调用新的对话框构造函数，传入初始类和预选方法
+        val dialog = SelectMethodsDialog(project, targetClass, preselectedMethod)
 
         if (dialog.showAndGet()) {
             val selectedMethods = dialog.getSelectedMethods()
@@ -163,7 +165,10 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
             if (caller in path) {
                 // （可选）可以打印一条信息提示检测到了递归
                 val indent = " ".repeat(4 * indentLevel)
-                consoleView.print("$indent[... Recursive call to ${formatMethod(caller)} ...]\n", ConsoleViewContentType.ERROR_OUTPUT)
+                consoleView.print(
+                    "$indent[... Recursive call to ${formatMethod(caller)} ...]\n",
+                    ConsoleViewContentType.ERROR_OUTPUT
+                )
                 continue // 跳过这个循环，防止无限递归
             }
 
@@ -179,16 +184,47 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
 
 
     /**
-     * 格式化 PsiMethod 的输出 (保持不变)
+     * 格式化 PsiMethod 的输出 (修正版，支持匿名类)
      */
     private fun formatMethod(method: PsiMethod): String {
-        val className = method.containingClass?.name ?: "UnknownClass"
+        val containingClass = method.containingClass
+
+        val className: String
+        if (containingClass is PsiAnonymousClass) {
+            // --- 匿名类的特殊处理逻辑 ---
+
+            // 1. 获取匿名类实现的接口或继承的基类名
+            // [修正] 使用 .referenceName 而不是 .presentableText
+            val baseClassName = containingClass.baseClassReference.referenceName ?: "AnonymousBase"
+
+            // 2. 寻找匿名类被定义的上下文（方法或类）
+            val contextMethod = PsiTreeUtil.getParentOfType(containingClass, PsiMethod::class.java, true)
+
+            val contextDescription = if (contextMethod != null) {
+                val outerClassName = contextMethod.containingClass?.name ?: ""
+                " in ${contextMethod.name}() in $outerClassName"
+            } else {
+                val outerClass =
+                    PsiTreeUtil.getParentOfType(containingClass, com.intellij.psi.PsiClass::class.java, true)
+                if (outerClass != null) " in ${outerClass.name}" else ""
+            }
+
+            // 3. 组合成一个描述性的名字
+            className = "Anonymous$contextDescription"
+
+        } else {
+            // --- 原有的常规类处理逻辑 ---
+            className = containingClass?.name ?: "UnknownClass"
+        }
+
+        // --- 后续的格式化保持不变 ---
         val methodName = method.name
         val params = method.parameterList.parameters
-            .joinToString(", ") { it.type.presentableText }
+            .joinToString(", ") { it.type.presentableText } // 这里的 .presentableText 是正确的，因为 it.type 是 PsiType
 
         val packageName = (method.containingFile as? PsiJavaFile)?.packageName
-            ?: (JavaDirectoryService.getInstance().getPackage(method.containingFile.containingDirectory!!)?.qualifiedName ?: "")
+            ?: (JavaDirectoryService.getInstance()
+                .getPackage(method.containingFile.containingDirectory!!)?.qualifiedName ?: "")
 
         return "$className.$methodName($params)  ($packageName)"
     }
