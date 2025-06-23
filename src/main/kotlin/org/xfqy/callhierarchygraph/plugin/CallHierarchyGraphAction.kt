@@ -2,6 +2,7 @@ package org.xfqy.callhierarchygraph.plugin
 
 import com.intellij.execution.filters.TextConsoleBuilderFactory
 import com.intellij.execution.ui.ConsoleView
+import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -18,6 +19,9 @@ import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.ui.content.ContentFactory
 import org.xfqy.callhierarchygraph.visualizer.CallHierarchyVisualizer
+import java.io.File
+import java.io.PrintWriter
+import java.io.StringWriter
 
 // ... other code in your class ...
 
@@ -99,10 +103,16 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
         if (dialog.showAndGet()) {
             val selectedMethods = dialog.getSelectedMethods()
 
-            if (selectedMethods.isNotEmpty()) {
+            // [新增] 从对话框获取路径和文件名
+            val outputPath = dialog.getOutputPath()
+            val outputFilename = dialog.getOutputFilename()
+
+            // 简单的验证
+            if (selectedMethods.isNotEmpty() && outputPath.isNotBlank() && outputFilename.isNotBlank()) {
                 val consoleView = getOrCreateConsole(project)
                 consoleView.clear()
-                runAnalysisInBackground(project, selectedMethods)
+                // [修改] 将新获取的值传递给后台任务
+                runAnalysisInBackground(project, selectedMethods, consoleView, outputPath, outputFilename)
             }
         }
     }
@@ -114,7 +124,9 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
     private fun runAnalysisInBackground(
         project: Project,
         methods: List<PsiMethod>,
-        fileName: String = "call_hierarchy"
+        consoleView: ConsoleView,
+        outputPath: String,
+        outputFilename: String
     ) {
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, "分析方法调用链", true) {
@@ -149,11 +161,19 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
                         indicator.checkCanceled()
                     }
 
-                    // 5. todo ddd 在所有任务完成后，一次性打印到控制台
-                    println(finalResultBuilder.toString())
-                    val visualizer = CallHierarchyVisualizer(4)
-                    visualizer.parseAndBuildGraph(finalResultBuilder.toString())
-                    visualizer.renderGraph(fileName, false, "html")
+                    try {
+                        val visualizer = CallHierarchyVisualizer(4)
+                        visualizer.parseAndBuildGraph(finalResultBuilder.toString())
+                        // [修改] 使用从对话框传入的参数
+                        visualizer.renderGraph(outputFilename, true, "html", outputPath)
+                        consoleView.print("图表已成功导出！\n 路径为:${outputPath}${File.separator}${outputFilename}", ConsoleViewContentType.SYSTEM_OUTPUT)
+                    } catch (e: Exception) {
+                        // 打印更详细的错误到控制台
+                        val sw = StringWriter()
+                        e.printStackTrace(PrintWriter(sw))
+                        consoleView.print("图表导出失败: ${e.message}\n$sw", ConsoleViewContentType.ERROR_OUTPUT)
+                    }
+
                 }
             }
         )
