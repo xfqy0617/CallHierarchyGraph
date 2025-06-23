@@ -257,10 +257,21 @@ class CallHierarchyVisualizer {
      */
     fun renderGraph(outputFilename: String, view: Boolean, format: String) {
         try {
-            val outputDir = Paths.get("output")
+            // 1. 获取用户主目录的路径字符串
+            val userHome = System.getProperty("user.home")
+
+            // 2. 使用 userHome 变量来构建基础路径
+            // Paths.get() 的第一个参数是基础路径，后续是子目录
+            val outputDir = Paths.get(userHome, "Downloads", "CallHierarchyGraph", "output")
+            // 注意：通常下载目录是 "Downloads" 而不是 "Download"
+
             Files.createDirectories(outputDir) // Create directory if not exists
 
             val outputPath = outputDir.resolve(outputFilename)
+//            val outputDir = Paths.get("~/Download/CallHierarchyGraph/output")
+//            Files.createDirectories(outputDir) // Create directory if not exists
+//
+//            val outputPath = outputDir.resolve(outputFilename)
 
             if ("html".equals(format, ignoreCase = true)) {
                 renderHtml(outputPath, view)

@@ -2,10 +2,8 @@ package org.xfqy.callhierarchygraph.manager
 
 import org.xfqy.callhierarchygraph.util.DistinctDarkColorGenerator
 import org.xfqy.callhierarchygraph.util.Pair
-import java.util.regex.Pattern
 
 // 预编译正则表达式，用于提取节点标签信息
-private val LABEL_PATTERN = Pattern.compile("^(.+?)\\.([a-zA-Z0-9_<>\$]+)\\((.*?)\\)(?:\\s*\\(\\s*(\\d+)\\s+usages\\s*\\))?\\s+\\(([a-zA-Z0-9_.]+)\\)\$")
 private val LABEL_PATTERN_KOTLIN: Regex = "^(.+?)\\.([a-zA-Z0-9_<>\$]+)\\((.*?)\\)(?:\\s*\\(\\s*(\\d+)\\s+usages\\s*\\))?\\s+\\(([a-zA-Z0-9_.]+)\\)\$".toRegex()
 class NodeManager {
     // 完整节点内容 -> 唯一节点ID

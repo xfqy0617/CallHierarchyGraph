@@ -2,7 +2,6 @@ package org.xfqy.callhierarchygraph.plugin
 
 import com.intellij.execution.filters.TextConsoleBuilderFactory
 import com.intellij.execution.ui.ConsoleView
-import com.intellij.execution.ui.ConsoleViewContentType
 import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
@@ -18,6 +17,7 @@ import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.ui.content.ContentFactory
+import org.xfqy.callhierarchygraph.visualizer.CallHierarchyVisualizer
 
 // ... other code in your class ...
 
@@ -102,7 +102,7 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
             if (selectedMethods.isNotEmpty()) {
                 val consoleView = getOrCreateConsole(project)
                 consoleView.clear()
-                runAnalysisInBackground(project, selectedMethods, consoleView)
+                runAnalysisInBackground(project, selectedMethods)
             }
         }
     }
@@ -111,7 +111,11 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
     /**
      * [重构] 将分析逻辑封装到一个单独的方法中，以便在后台任务中调用
      */
-    private fun runAnalysisInBackground(project: Project, methods: List<PsiMethod>, consoleView: ConsoleView) {
+    private fun runAnalysisInBackground(
+        project: Project,
+        methods: List<PsiMethod>,
+        fileName: String = "call_hierarchy"
+    ) {
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, "分析方法调用链", true) {
                 override fun run(indicator: ProgressIndicator) {
@@ -146,7 +150,10 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
                     }
 
                     // 5. todo ddd 在所有任务完成后，一次性打印到控制台
-                    consoleView.print(finalResultBuilder.toString(), ConsoleViewContentType.NORMAL_OUTPUT)
+                    println(finalResultBuilder.toString())
+                    val visualizer = CallHierarchyVisualizer(4)
+                    visualizer.parseAndBuildGraph(finalResultBuilder.toString())
+                    visualizer.renderGraph(fileName, false, "html")
                 }
             }
         )
