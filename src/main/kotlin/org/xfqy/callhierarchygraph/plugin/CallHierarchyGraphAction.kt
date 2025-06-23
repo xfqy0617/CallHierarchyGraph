@@ -109,76 +109,99 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
 
 
     /**
-     * 将分析逻辑封装到一个单独的方法中，以便在后台任务中调用
+     * [重构] 将分析逻辑封装到一个单独的方法中，以便在后台任务中调用
      */
     private fun runAnalysisInBackground(project: Project, methods: List<PsiMethod>, consoleView: ConsoleView) {
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, "分析方法调用链", true) {
                 override fun run(indicator: ProgressIndicator) {
+                    // 1. 使用 StringBuilder 来高效地拼接所有结果
+                    val finalResultBuilder = StringBuilder()
+
                     methods.forEachIndexed { index, targetMethod ->
+                        // 在多个方法的分析结果之间添加分隔符
                         if (index > 0) {
-                            consoleView.print("\n\n", ConsoleViewContentType.NORMAL_OUTPUT)
+                            finalResultBuilder.append("\n")
                         }
 
                         indicator.text = "正在分析: ${targetMethod.name}"
-                        consoleView.print(formatMethod(targetMethod) + "\n", ConsoleViewContentType.NORMAL_OUTPUT)
 
-                        // [修改] 初始调用，传入一个包含根方法的路径集合
-                        // 这样可以防止 targetMethod 的直接调用者就是它自己的情况 (直接递归)
-                        findAndPrintCallers(targetMethod, project, consoleView, 1, setOf(targetMethod), indicator)
+                        // 2. 将目标方法自身的信息先添加到结果中
+                        finalResultBuilder.append(formatMethod(targetMethod)).append("\n")
 
+                        // 3. 递归查找调用链，并获取结果字符串列表
+                        val callChainLines = findAndPrintCallers(
+                            targetMethod,
+                            project,
+                            1,
+                            setOf(targetMethod),
+                            indicator
+                        )
+
+                        // 4. 将调用链结果追加到总结果中
+                        finalResultBuilder.append(callChainLines.joinToString("\n"))
+
+                        // 检查任务是否被取消
                         indicator.checkCanceled()
                     }
+
+                    // 5. todo ddd 在所有任务完成后，一次性打印到控制台
+                    consoleView.print(finalResultBuilder.toString(), ConsoleViewContentType.NORMAL_OUTPUT)
                 }
             }
         )
     }
 
     /**
-     * 递归查找并打印方法的调用者 (修正版)
+     * [重构] 递归查找方法的调用者，并返回字符串列表
+     *
+     * @return 返回一个包含所有调用链行的字符串列表
      */
     private fun findAndPrintCallers(
         method: PsiMethod,
         project: Project,
-        consoleView: ConsoleView,
         indentLevel: Int,
         path: Set<PsiMethod>,
         indicator: ProgressIndicator
-    ) {
+    ): List<String> {
         indicator.checkCanceled()
 
-        // [修正] 将 PSI 搜索和处理操作包裹在 runReadAction 中
+        // 存放当前层级及所有子层级的结果
+        val resultLines = mutableListOf<String>()
+
         val callingMethods = ApplicationManager.getApplication().runReadAction<List<PsiMethod>> {
             val searchScope = GlobalSearchScope.projectScope(project)
             val references = ReferencesSearch.search(method, searchScope).findAll()
-
             references
                 .mapNotNull { PsiTreeUtil.getParentOfType(it.element, PsiMethod::class.java) }
                 .distinct()
         }
 
-        // 现在 `callingMethods` 是一个普通的 List，可以安全地在后台线程中遍历
         for (caller in callingMethods) {
-            // [修正] 检查循环依赖的逻辑也需要放在 readAction 中，因为它也访问 PSI
             val isInPath = ApplicationManager.getApplication().runReadAction<Boolean> { caller in path }
             if (isInPath) {
                 val indent = " ".repeat(4 * indentLevel)
-                // formatMethod 内部已经有 readAction，所以这里可以安全调用
-                consoleView.print("$indent[... Recursive call to ${formatMethod(caller)} ...]\n", ConsoleViewContentType.ERROR_OUTPUT)
+                // 将递归提示信息也加入结果列表
+                resultLines.add("$indent[... Recursive call to ${formatMethod(caller)} ...]")
                 continue
             }
 
             val indent = " ".repeat(4 * indentLevel)
-            // formatMethod 内部已经有 readAction，所以这里可以安全调用
-            consoleView.print("$indent${formatMethod(caller)}\n", ConsoleViewContentType.NORMAL_OUTPUT)
+            // 将当前调用者信息加入结果列表
+            resultLines.add("$indent${formatMethod(caller)}")
 
-            // 递归调用，传递新的路径
-            // [修正] 创建新路径也需要 readAction
             val newPath = ApplicationManager.getApplication().runReadAction<Set<PsiMethod>> { path + method }
-            findAndPrintCallers(caller, project, consoleView, indentLevel + 1, newPath, indicator)
+
+            // 递归调用，并将其返回的子调用链结果全部添加到当前结果列表中
+            val subCallLines = findAndPrintCallers(caller, project, indentLevel + 1, newPath, indicator)
+            resultLines.addAll(subCallLines)
         }
+
+        return resultLines
     }
 
+// formatMethod 方法保持不变，它仍然返回单个格式化的字符串，这很适合被复用。
+// ...
     /**
      * 格式化 PsiMethod 的输出 (修正版)
      */
@@ -194,7 +217,8 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
                     val outerClassName = contextMethod.containingClass?.name ?: ""
                     " in ${contextMethod.name}() in $outerClassName"
                 } else {
-                    val outerClass = PsiTreeUtil.getParentOfType(containingClass, com.intellij.psi.PsiClass::class.java, true)
+                    val outerClass =
+                        PsiTreeUtil.getParentOfType(containingClass, com.intellij.psi.PsiClass::class.java, true)
                     if (outerClass != null) " in ${outerClass.name}" else ""
                 }
                 className = "Anonymous$contextDescription"
@@ -207,12 +231,14 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
                 .joinToString(", ") { it.type.presentableText }
 
             val packageName = (method.containingFile as? PsiJavaFile)?.packageName
-                ?: (JavaDirectoryService.getInstance().getPackage(method.containingFile.containingDirectory!!)?.qualifiedName ?: "")
+                ?: (JavaDirectoryService.getInstance()
+                    .getPackage(method.containingFile.containingDirectory!!)?.qualifiedName ?: "")
 
             // lambda 表达式的最后一行是返回值
             "$className.$methodName($params)  ($packageName)"
         }
     }
+
     /**
      * 获取或创建一个新的控制台 Tool Window (保持不变)
      */
