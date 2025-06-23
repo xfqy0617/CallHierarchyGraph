@@ -20,6 +20,7 @@
     <!-- Product and plugin compatibility requirements.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-compatibility.html -->
     <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.java</depends>
 
     <!-- Extension points defined by the plugin.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
@@ -34,7 +35,9 @@
     </extensions>
 
     <actions>
-        <action id = "CallHierarchyGraph" class="org.xfqy.callhierarchygraph.plugin.CallHierarchyGraphAction" text="Call Hierarchy to HTML">
+        <action id = "CallHierarchyGraph"
+                class="org.xfqy.callhierarchygraph.plugin.CallHierarchyGraphAction"
+                text="Call Hierarchy to HTML">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>
     </actions>
