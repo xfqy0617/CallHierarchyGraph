@@ -12,13 +12,16 @@ import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindowManager
-import com.intellij.psi.*
+import com.intellij.psi.JavaDirectoryService
+import com.intellij.psi.PsiClass
+import com.intellij.psi.PsiJavaFile
+import com.intellij.psi.PsiMethod
 import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.ui.content.ContentFactory
 
-class CallHierarchyGraphAction : AnAction("分析方法调用链") { // 更新了文本
+class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更新了文本
 
     private val consoleViewMap = mutableMapOf<Project, ConsoleView>()
 
@@ -27,21 +30,27 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链") { // 更新�
     }
 
     /**
-     * 更新 Action 的状态，只有当选中的是 Java/Kotlin 类时才启用
+     * 更新 Action 的状态。
+     * 当右键点击的是一个类，或者在一个方法的内部/名称上时，启用 Action。
      */
     override fun update(e: AnActionEvent) {
         val project = e.project
-        // 从事件上下文中获取 PSI 元素
         val psiElement = e.getData(CommonDataKeys.PSI_ELEMENT)
 
-        // 检查项目是否存在，并且选中的元素是否是一个 PsiClass
-        if (project == null || psiElement !is PsiClass) {
+        if (project == null || psiElement == null) {
             e.presentation.isEnabledAndVisible = false
             return
         }
 
-        // 如果是一个类，并且它有方法，则启用 Action
-        e.presentation.isEnabledAndVisible = psiElement.methods.isNotEmpty()
+        // 检查元素是否是 PsiClass 或 PsiMethod
+        val psiClass = when (psiElement) {
+            is PsiClass -> psiElement
+            is PsiMethod -> psiElement.containingClass
+            else -> null
+        }
+
+        // 如果能找到对应的类，并且这个类有方法，就启用 Action
+        e.presentation.isEnabledAndVisible = psiClass != null && psiClass.methods.isNotEmpty()
     }
 
     /**
@@ -49,32 +58,52 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链") { // 更新�
      */
     override fun actionPerformed(e: AnActionEvent) {
         val project = e.project ?: return
-        // 获取选中的 PsiClass
-        val psiClass = e.getData(CommonDataKeys.PSI_ELEMENT) as? PsiClass ?: return
+        val psiElement = e.getData(CommonDataKeys.PSI_ELEMENT) ?: return
 
-        // 如果类中没有方法，则不执行任何操作
-        if (psiClass.methods.isEmpty()) {
+        // 确定目标类和可能被预选中的方法
+        val targetClass: PsiClass?
+        val preselectedMethod: PsiMethod?
+
+        when (psiElement) {
+            is PsiClass -> {
+                targetClass = psiElement
+                preselectedMethod = null // 在类上点击，没有预选方法
+            }
+            is PsiMethod -> {
+                targetClass = psiElement.containingClass
+                preselectedMethod = psiElement // 在方法上点击，预选此方法
+            }
+            else -> {
+                // 如果在编辑器的其他位置（例如方法体内部），尝试向上查找
+                val method = PsiTreeUtil.getParentOfType(psiElement, PsiMethod::class.java)
+                if (method != null) {
+                    targetClass = method.containingClass
+                    preselectedMethod = method
+                } else {
+                    // 实在找不到就返回
+                    return
+                }
+            }
+        }
+
+        if (targetClass == null || targetClass.methods.isEmpty()) {
             return
         }
 
-        // 创建并显示方法选择对话框
-        val dialog = SelectMethodsDialog(project, psiClass.methods.toList())
+        // 创建并显示对话框，传入所有方法和预选中的方法
+        val dialog = SelectMethodsDialog(project, targetClass.methods.toList(), preselectedMethod)
 
-        // showAndGet() 会显示对话框并等待用户操作。如果用户点击 OK，返回 true
         if (dialog.showAndGet()) {
             val selectedMethods = dialog.getSelectedMethods()
 
-            // 如果用户至少选择了一个方法
             if (selectedMethods.isNotEmpty()) {
-                // 显示并清空控制台
                 val consoleView = getOrCreateConsole(project)
                 consoleView.clear()
-
-                // 使用后台任务执行搜索，避免 UI 冻结
                 runAnalysisInBackground(project, selectedMethods, consoleView)
             }
         }
     }
+
 
     /**
      * 将分析逻辑封装到一个单独的方法中，以便在后台任务中调用

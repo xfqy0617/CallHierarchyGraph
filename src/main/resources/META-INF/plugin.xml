@@ -37,13 +37,15 @@
     <actions>
         <action id = "CallHierarchyGraph"
                 class="org.xfqy.callhierarchygraph.plugin.CallHierarchyGraphAction"
-                text="分析方法调用"
+                text="分析方法调用..."
                 description="选择类中的方法并分析它们的调用层次结构">
 <!--            <add-to-group group-id="EditorPopupMenu" anchor="last"/>-->
             <!-- 添加到项目视图右键菜单 (例如在文件、类上右键) -->
-            <add-to-group group-id="ProjectViewPopupMenu" anchor="before" relative-to-action="AnalyzeMenu"/>
+<!--            <add-to-group group-id="ProjectViewPopupMenu" anchor="before" relative-to-action="AnalyzeMenu"/>-->
             <!-- 添加到编辑器右键菜单 -->
-            <add-to-group group-id="EditorPopupMenu" anchor="before" relative-to-action="AnalyzeMenu"/>
+<!--            <add-to-group group-id="EditorPopupMenu" anchor="before" relative-to-action="AnalyzeMenu"/>-->
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="before" relative-to-action="AnalyzeMenu"/>-->
+            <add-to-group group-id="EditorPopupMenu" anchor="before" relative-to-action="AnalyzeMenu"/>-->
         </action>
     </actions>
 </idea-plugin>
