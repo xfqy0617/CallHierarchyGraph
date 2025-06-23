@@ -4,14 +4,14 @@ import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.Messages
-import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiMethod
-import com.intellij.psi.PsiReference
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.PsiTreeUtil
 import org.xfqy.callhierarchygraph.visualizer.CallHierarchyVisualizer
 import java.nio.file.Files
 import java.nio.file.Paths
+import com.intellij.openapi.editor.EditorFactory
+import com.intellij.psi.PsiDocumentManager
 
 class CallHierarchyGraphAction : AnAction("Export Call Hierarchy to HTML") {
     override fun actionPerformed(e: AnActionEvent) {
@@ -29,10 +29,11 @@ class CallHierarchyGraphAction : AnAction("Export Call Hierarchy to HTML") {
     private fun getCallHierarchyText(project: Project): String {
         val callHierarchyText = StringBuilder()
         try {
-            val editor = com.intellij.openapi.editor.EditorFactory.getInstance().allEditors.firstOrNull { it.project == project } ?: return ""
-            val psiFile = com.intellij.psi.PsiDocumentManager.getInstance(project).getPsiFile(editor.document) ?: return ""
+            val editor = EditorFactory.getInstance().allEditors.firstOrNull { it.project == project } ?: return ""
+            val psiFile = PsiDocumentManager.getInstance(project).getPsiFile(editor.document) ?: return ""
             val offset = editor.caretModel.offset
             val element = psiFile.findElementAt(offset) ?: return ""
+            // println(PsiMethod::class)
             val method = PsiTreeUtil.getParentOfType(element, PsiMethod::class.java) ?: return ""
             buildCallHierarchy(method, callHierarchyText, 0)
         } catch (e: Exception) {
