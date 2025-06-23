@@ -7,116 +7,123 @@ import com.intellij.psi.PsiClass
 import com.intellij.psi.PsiMethod
 import com.intellij.ui.CheckBoxList
 import com.intellij.ui.components.JBScrollPane
+import com.intellij.util.ui.JBUI
 import java.awt.BorderLayout
 import java.awt.FlowLayout
-import javax.swing.BorderFactory
-import javax.swing.BoxLayout
-import javax.swing.JButton
-import javax.swing.JComponent
-import javax.swing.JPanel
+import javax.swing.*
 
 class SelectMethodsDialog(
     private val project: Project,
-    initialClass: PsiClass, // 必须传入一个初始类
+    initialClass: PsiClass,
     private val preselectedMethod: PsiMethod?
 ) : DialogWrapper(project) {
 
-    // 使用一个 Map 来存储每个类和其对应的 CheckBoxList
     private val classMethodLists = mutableMapOf<PsiClass, CheckBoxList<PsiMethod>>()
-    // 主内容面板，所有“类面板”都将添加到这里
     private val mainPanel = JPanel()
 
     init {
         title = "选择要分析的方法"
-        // 设置主面板为垂直盒式布局
         mainPanel.layout = BoxLayout(mainPanel, BoxLayout.Y_AXIS)
-
-        // 初始化时，首先添加从 Action 上下文传来的初始类
         addClassPanel(initialClass, preselectedMethod)
-
         init()
     }
 
     override fun createCenterPanel(): JComponent {
-        // 将我们的动态主面板放入滚动窗格中
         val scrollPane = JBScrollPane(mainPanel)
         scrollPane.preferredSize = java.awt.Dimension(600, 400)
+        // 给滚动面板也加一点边距，让UI看起来不那么拥挤
+        scrollPane.border = JBUI.Borders.empty(5)
         return scrollPane
     }
 
-    /**
-     * 创建对话框底部的自定义按钮面板
-     */
     override fun createSouthPanel(): JComponent {
-        // 获取标准的 OK/Cancel 按钮面板
         val southPanel = super.createSouthPanel()
-
-        // 创建一个用于放置我们自定义按钮的面板
         val customButtonsPanel = JPanel(FlowLayout(FlowLayout.LEFT))
-
         val addClassButton = JButton("添加类...")
         addClassButton.addActionListener {
-            // 打开 IntelliJ 的标准类选择器
             val chooser = TreeClassChooserFactory.getInstance(project)
                 .createProjectScopeChooser("选择要添加的类")
-
             chooser.showDialog()
-
-            // 如果用户选择了一个类
             val selectedClass = chooser.selected
             if (selectedClass != null && !classMethodLists.containsKey(selectedClass)) {
-                // 动态添加一个新的类面板到UI上
                 addClassPanel(selectedClass, null)
-                // 重新调整对话框大小以适应新内容
                 pack()
             }
         }
-
         customButtonsPanel.add(addClassButton)
-
-        // 将自定义按钮面板和标准按钮面板组合在一起
         val container = JPanel(BorderLayout())
         container.add(customButtonsPanel, BorderLayout.WEST)
         container.add(southPanel, BorderLayout.EAST)
-
         return container
     }
 
     /**
-     * 动态创建一个包含类名标题和方法复选框列表的面板，并添加到主面板中
+     * [重构] 动态创建一个包含类标题(带全选框)和方法复选框列表的面板
      */
     private fun addClassPanel(psiClass: PsiClass, methodToSelect: PsiMethod?) {
-        val classPanel = JPanel(BorderLayout())
-        // 使用 TitledBorder 来显示类名，非常清晰
-        val borderTitle = psiClass.qualifiedName ?: psiClass.name ?: "Unknown Class"
-        classPanel.border = BorderFactory.createTitledBorder(borderTitle)
+        // 1. 创建最外层的容器面板，使用 BorderLayout
+        val classContainerPanel = JPanel(BorderLayout())
+        classContainerPanel.border = BorderFactory.createCompoundBorder(
+            JBUI.Borders.customLine(JBUI.CurrentTheme.ToolWindow.borderColor(), 1, 0, 1, 0),
+            JBUI.Borders.empty(5)
+        )
 
+        // 2. 创建自定义的标题面板
+        val headerPanel = JPanel(BorderLayout())
+        val masterCheckbox = JCheckBox() // 全选/全不选的主复选框
+        val classNameLabel = JLabel(psiClass.qualifiedName ?: psiClass.name)
+        classNameLabel.font = classNameLabel.font.deriveFont(java.awt.Font.BOLD) // 加粗显示类名
+
+        val titleContentPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0))
+        titleContentPanel.add(masterCheckbox)
+        titleContentPanel.add(Box.createHorizontalStrut(5)) // 增加一点间距
+        titleContentPanel.add(classNameLabel)
+        headerPanel.add(titleContentPanel, BorderLayout.WEST)
+        headerPanel.border = JBUI.Borders.emptyBottom(5)
+
+        // 3. 创建方法列表
         val methodList = CheckBoxList<PsiMethod>()
         psiClass.methods.forEach { method ->
             methodList.addItem(
                 method,
                 formatMethodForDisplay(method),
-                method == methodToSelect // 预选
+                method == methodToSelect
             )
         }
 
-        // 存储这个列表以便之后获取选中的方法
+        // 检查初始状态，如果只有一个方法且被选中，则主复选框也应被选中
+        if (psiClass.methods.size == 1 && methodToSelect != null && psiClass.methods.first() == methodToSelect) {
+            masterCheckbox.isSelected = true
+        }
+
+        // 4. 为主复选框添加事件监听器
+        masterCheckbox.addActionListener {
+            val isSelected = masterCheckbox.isSelected
+            for (i in 0 until methodList.itemsCount) {
+                // 直接使用 setItemSelected(index, boolean) 效率更高
+                methodList.setItemSelected(methodList.getItemAt(i), isSelected)
+            }
+            // 强制重绘列表以确保UI立即更新
+            methodList.repaint()
+        }
+
+        // 5. 将所有组件组装到容器面板中
+        classContainerPanel.add(headerPanel, BorderLayout.NORTH)
+        // 将方法列表放入滚动窗格，以防方法过多
+        classContainerPanel.add(JBScrollPane(methodList).apply { border = null }, BorderLayout.CENTER)
+
+        // 存储列表以便之后获取选中的方法
         classMethodLists[psiClass] = methodList
 
-        classPanel.add(methodList, BorderLayout.CENTER)
-        mainPanel.add(classPanel)
-        // 刷新UI
+        // 将最终完成的类面板添加到主面板
+        mainPanel.add(classContainerPanel)
+        mainPanel.add(Box.createVerticalStrut(5)) // 增加类与类之间的垂直间距
         mainPanel.revalidate()
         mainPanel.repaint()
     }
 
-    /**
-     * 获取所有面板中所有被勾选的方法
-     */
     fun getSelectedMethods(): List<PsiMethod> {
         val allSelectedMethods = mutableListOf<PsiMethod>()
-
-        // 遍历我们存储的所有 CheckBoxList
         classMethodLists.values.forEach { list ->
             for (i in 0 until list.itemsCount) {
                 if (list.isItemSelected(i)) {

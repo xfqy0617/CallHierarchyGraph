@@ -7,6 +7,7 @@ import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
@@ -134,101 +135,84 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
     }
 
     /**
-     * 递归查找并打印方法的调用者
-     *
-     * @param method        当前要查找调用者的方法
-     * @param project       项目实例
-     * @param consoleView   控制台视图
-     * @param indentLevel   当前的缩进级别
-     * @param path          从根方法到当前方法(不含)的调用路径，用于防止无限递归
-     * @param indicator     进度指示器
+     * 递归查找并打印方法的调用者 (修正版)
      */
     private fun findAndPrintCallers(
         method: PsiMethod,
         project: Project,
         consoleView: ConsoleView,
         indentLevel: Int,
-        path: Set<PsiMethod>, // [修改] 使用不可变的 Set，并重命名为 path
+        path: Set<PsiMethod>,
         indicator: ProgressIndicator
     ) {
         indicator.checkCanceled()
 
-        val searchScope = GlobalSearchScope.projectScope(project)
-        val references = ReferencesSearch.search(method, searchScope).findAll()
+        // [修正] 将 PSI 搜索和处理操作包裹在 runReadAction 中
+        val callingMethods = ApplicationManager.getApplication().runReadAction<List<PsiMethod>> {
+            val searchScope = GlobalSearchScope.projectScope(project)
+            val references = ReferencesSearch.search(method, searchScope).findAll()
 
-        val callingMethods = references
-            .mapNotNull { PsiTreeUtil.getParentOfType(it.element, PsiMethod::class.java) }
-            .distinct()
+            references
+                .mapNotNull { PsiTreeUtil.getParentOfType(it.element, PsiMethod::class.java) }
+                .distinct()
+        }
 
+        // 现在 `callingMethods` 是一个普通的 List，可以安全地在后台线程中遍历
         for (caller in callingMethods) {
-            // [修改] 检查 'caller' 是否已经存在于当前路径中，以避免循环依赖
-            if (caller in path) {
-                // （可选）可以打印一条信息提示检测到了递归
+            // [修正] 检查循环依赖的逻辑也需要放在 readAction 中，因为它也访问 PSI
+            val isInPath = ApplicationManager.getApplication().runReadAction<Boolean> { caller in path }
+            if (isInPath) {
                 val indent = " ".repeat(4 * indentLevel)
-                consoleView.print(
-                    "$indent[... Recursive call to ${formatMethod(caller)} ...]\n",
-                    ConsoleViewContentType.ERROR_OUTPUT
-                )
-                continue // 跳过这个循环，防止无限递归
+                // formatMethod 内部已经有 readAction，所以这里可以安全调用
+                consoleView.print("$indent[... Recursive call to ${formatMethod(caller)} ...]\n", ConsoleViewContentType.ERROR_OUTPUT)
+                continue
             }
 
             val indent = " ".repeat(4 * indentLevel)
+            // formatMethod 内部已经有 readAction，所以这里可以安全调用
             consoleView.print("$indent${formatMethod(caller)}\n", ConsoleViewContentType.NORMAL_OUTPUT)
 
-            // [修改] 递归调用时，创建一个新的路径集合
-            // 新路径 = 旧路径 + 当前正在分析的方法 (method)
-            // 注意：不是 `path + caller`，因为 `path` 代表的是调用链，`method` 是被调用者
-            findAndPrintCallers(caller, project, consoleView, indentLevel + 1, path + method, indicator)
+            // 递归调用，传递新的路径
+            // [修正] 创建新路径也需要 readAction
+            val newPath = ApplicationManager.getApplication().runReadAction<Set<PsiMethod>> { path + method }
+            findAndPrintCallers(caller, project, consoleView, indentLevel + 1, newPath, indicator)
         }
     }
-
 
     /**
-     * 格式化 PsiMethod 的输出 (修正版，支持匿名类)
+     * 格式化 PsiMethod 的输出 (修正版)
      */
     private fun formatMethod(method: PsiMethod): String {
-        val containingClass = method.containingClass
+        // [修正] 将整个函数体包裹在 runReadAction 中
+        return ApplicationManager.getApplication().runReadAction<String> {
+            val containingClass = method.containingClass
 
-        val className: String
-        if (containingClass is PsiAnonymousClass) {
-            // --- 匿名类的特殊处理逻辑 ---
-
-            // 1. 获取匿名类实现的接口或继承的基类名
-            // [修正] 使用 .referenceName 而不是 .presentableText
-            val baseClassName = containingClass.baseClassReference.referenceName ?: "AnonymousBase"
-
-            // 2. 寻找匿名类被定义的上下文（方法或类）
-            val contextMethod = PsiTreeUtil.getParentOfType(containingClass, PsiMethod::class.java, true)
-
-            val contextDescription = if (contextMethod != null) {
-                val outerClassName = contextMethod.containingClass?.name ?: ""
-                " in ${contextMethod.name}() in $outerClassName"
+            val className: String
+            if (containingClass is PsiAnonymousClass) {
+                val contextMethod = PsiTreeUtil.getParentOfType(containingClass, PsiMethod::class.java, true)
+                val contextDescription = if (contextMethod != null) {
+                    val outerClassName = contextMethod.containingClass?.name ?: ""
+                    " in ${contextMethod.name}() in $outerClassName"
+                } else {
+                    val outerClass = PsiTreeUtil.getParentOfType(containingClass, com.intellij.psi.PsiClass::class.java, true)
+                    if (outerClass != null) " in ${outerClass.name}" else ""
+                }
+                className = "Anonymous$contextDescription"
             } else {
-                val outerClass =
-                    PsiTreeUtil.getParentOfType(containingClass, com.intellij.psi.PsiClass::class.java, true)
-                if (outerClass != null) " in ${outerClass.name}" else ""
+                className = containingClass?.name ?: "UnknownClass"
             }
 
-            // 3. 组合成一个描述性的名字
-            className = "Anonymous$contextDescription"
+            val methodName = method.name
+            val params = method.parameterList.parameters
+                .joinToString(", ") { it.type.presentableText }
 
-        } else {
-            // --- 原有的常规类处理逻辑 ---
-            className = containingClass?.name ?: "UnknownClass"
+            val packageName = (method.containingFile as? PsiJavaFile)?.packageName
+                ?: (JavaDirectoryService.getInstance().getPackage(method.containingFile.containingDirectory!!)?.qualifiedName ?: "")
+
+            // lambda 表达式的最后一行是返回值
+            "$className.$methodName($params)  ($packageName)"
         }
-
-        // --- 后续的格式化保持不变 ---
-        val methodName = method.name
-        val params = method.parameterList.parameters
-            .joinToString(", ") { it.type.presentableText } // 这里的 .presentableText 是正确的，因为 it.type 是 PsiType
-
-        val packageName = (method.containingFile as? PsiJavaFile)?.packageName
-            ?: (JavaDirectoryService.getInstance()
-                .getPackage(method.containingFile.containingDirectory!!)?.qualifiedName ?: "")
-
-        return "$className.$methodName($params)  ($packageName)"
     }
-
     /**
      * 获取或创建一个新的控制台 Tool Window (保持不变)
      */
