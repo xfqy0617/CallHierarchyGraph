@@ -20,6 +20,8 @@ import java.awt.FlowLayout
 import java.awt.Font
 import java.nio.file.Paths
 import javax.swing.*
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 
 class SelectMethodsDialog(
     private val project: Project,
@@ -146,24 +148,22 @@ class SelectMethodsDialog(
     }
 
     /**
-     * [UI增强最终修正版] 动态创建一个视觉层次感更强的“卡片式”面板，用于展示类和其方法。
-     * 该版本使用了兼容性更好的UIUtil API，确保在不同版本的IDE中都能正常编译和运行。
+     * [UI增强最终版 v3] 动态创建可移除的、视觉层次感更强的“卡片式”面板。
+     * - 修复了弃用警告。
+     * - 在每个类面板的标题栏右上角添加了删除按钮。
      */
     private fun addClassPanel(psiClass: PsiClass, methodToSelect: PsiMethod?) {
         // --- 1. 创建卡片式容器 ---
         val classContainerPanel = JPanel(BorderLayout())
-        // [修复] 使用 UIUtil.getSeparatorColor() 获取标准的分隔线/边框颜色。
-        // 这是兼容性非常好的一个API，用于UI元素的分隔。
         classContainerPanel.border = BorderFactory.createLineBorder(UIUtil.CONTRAST_BORDER_COLOR)
 
-        // --- 2. 创建带背景色和图标的标题栏 ---
+        // --- 2. 创建带背景色、图标和删除按钮的标题栏 ---
         val headerPanel = JPanel(BorderLayout())
-        // [修复] 使用 UIUtil.getDecoratedRowColor() 获取用于装饰/高亮的背景色。
-        // 这个颜色通常用于表格的交替行或设置中的分组，非常适合作为标题栏背景。
         headerPanel.background = UIUtil.getDecoratedRowColor()
         headerPanel.isOpaque = true
         headerPanel.border = JBUI.Borders.empty(8, 10)
 
+        // -- a. 左侧的标题内容 --
         val masterCheckbox = JCheckBox()
         val classNameLabel = JLabel(psiClass.qualifiedName ?: psiClass.name, AllIcons.Nodes.Class, SwingConstants.LEFT)
         classNameLabel.font = classNameLabel.font.deriveFont(Font.BOLD)
@@ -176,7 +176,37 @@ class SelectMethodsDialog(
 
         headerPanel.add(titleContentPanel, BorderLayout.CENTER)
 
-        // --- 3. 创建方法列表 ---
+        // -- b. [新增] 右侧的删除按钮 --
+        val removeButton = JLabel(AllIcons.Actions.Close)
+        removeButton.toolTipText = "移除该类" // 提示用户按钮的功能
+        // 设置鼠标指针样式为手型，增强可点击的视觉提示
+        removeButton.cursor = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR)
+
+        removeButton.addMouseListener(object : MouseAdapter() {
+            override fun mouseClicked(e: MouseEvent?) {
+                // 执行删除操作
+                mainPanel.remove(classContainerPanel) // 移除UI面板
+                classMethodLists.remove(psiClass)     // 移除数据
+
+                // 刷新主面板以更新布局和显示
+                mainPanel.revalidate()
+                mainPanel.repaint()
+            }
+
+            override fun mouseEntered(e: MouseEvent?) {
+                // 鼠标悬浮时切换到高亮图标
+                removeButton.icon = AllIcons.Actions.CloseHovered
+            }
+
+            override fun mouseExited(e: MouseEvent?) {
+                // 鼠标离开时恢复默认图标
+                removeButton.icon = AllIcons.Actions.Close
+            }
+        })
+        headerPanel.add(removeButton, BorderLayout.EAST)
+
+
+        // --- 3. 创建方法列表 (逻辑不变) ---
         val methodList = CheckBoxList<PsiMethod>()
         val methodsToShow = psiClass.methods.filter { !it.isConstructor }
         methodsToShow.forEach { method ->
@@ -186,11 +216,9 @@ class SelectMethodsDialog(
                 method == methodToSelect
             )
         }
-
         if (methodsToShow.isNotEmpty() && methodsToShow.all { it == methodToSelect }) {
             masterCheckbox.isSelected = true
         }
-
         masterCheckbox.addActionListener {
             val isSelected = masterCheckbox.isSelected
             for (i in 0 until methodList.itemsCount) {
@@ -199,11 +227,12 @@ class SelectMethodsDialog(
             methodList.repaint()
         }
 
-        // --- 4. 将方法列表放入带内边距的滚动面板中 ---
+
+        // --- 4. 将方法列表放入带内边距的滚动面板中 (逻辑不变) ---
         val methodScrollPane = JBScrollPane(methodList)
         methodScrollPane.border = JBUI.Borders.empty(5, 20, 10, 10)
 
-        // --- 5. 组装最终的卡片 ---
+        // --- 5. 组装最终的卡片 (逻辑不变) ---
         classContainerPanel.add(headerPanel, BorderLayout.NORTH)
         classContainerPanel.add(methodScrollPane, BorderLayout.CENTER)
 
