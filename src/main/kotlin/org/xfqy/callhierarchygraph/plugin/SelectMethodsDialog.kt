@@ -28,6 +28,7 @@ class SelectMethodsDialog(
     private lateinit var filenameTextField: JBTextField
     private val classMethodLists = mutableMapOf<PsiClass, CheckBoxList<PsiMethod>>()
     private val mainPanel = JPanel()
+    private val scopeRadioButtons = mutableMapOf<AnalysisScope, JRadioButton>() // [新增] 用于存储单选按钮
 
     init {
         title = "选择要分析的方法"
@@ -44,10 +45,22 @@ class SelectMethodsDialog(
         return scrollPane
     }
     /**
-     * [重构] 创建对话框底部的自定义面板，包含文件选择功能
+     * [重构] 创建对话框底部的自定义面板，包含作用域和文件选择功能
      */
     override fun createSouthPanel(): JComponent {
-        // --- 1. 创建输入字段和按钮 ---
+        // --- 1. 创建作用域选择器 ---
+        val scopePanel = JPanel(FlowLayout(FlowLayout.LEFT))
+        val scopeButtonGroup = ButtonGroup()
+        AnalysisScope.values().forEach { scope ->
+            val radioButton = JRadioButton(scope.displayName)
+            scopeRadioButtons[scope] = radioButton
+            scopeButtonGroup.add(radioButton)
+            scopePanel.add(radioButton)
+        }
+        // 设置默认选项为 "仅生产代码"
+        scopeRadioButtons[AnalysisScope.PRODUCTION]?.isSelected = true
+
+        // --- 2. 创建文件路径和文件名输入字段 (逻辑不变) ---
         val userHome = System.getProperty("user.home")
         val defaultPath = Paths.get(userHome, "Downloads", "CallHierarchyGraph", "output").toString()
         val defaultFilename = "call_hierarchy"
@@ -82,20 +95,19 @@ class SelectMethodsDialog(
             }
         }
 
-        // --- 2. 使用布局管理器组织 UI ---
-
-        // 将路径文本框和浏览按钮放在一个面板里
-        val pathPanel = JPanel(BorderLayout(JBUI.scale(5), 0)) // 增加5像素的水平间距
+        val pathPanel = JPanel(BorderLayout(JBUI.scale(5), 0))
         pathPanel.add(pathTextField, BorderLayout.CENTER)
         pathPanel.add(browseButton, BorderLayout.EAST)
 
-        // 使用 FormBuilder 构建整体表单
+        // --- 3. 使用 FormBuilder 构建整体表单 ---
+        // [修改] 将作用域选择器添加到表单中
         val inputFieldsPanel = FormBuilder.createFormBuilder()
+            .addLabeledComponent(JLabel("分析作用域:"), scopePanel, true) // [新增]
             .addLabeledComponent(JLabel("导出路径:"), pathPanel, true)
             .addLabeledComponent(JLabel("导出文件名:"), filenameTextField, true)
             .panel
 
-        // --- 3. 组合所有南部组件 (逻辑不变) ---
+        // --- 4. 组合所有南部组件 (逻辑不变) ---
         val southPanel = super.createSouthPanel()
         val customButtonsPanel = JPanel(FlowLayout(FlowLayout.LEFT))
         val addClassButton = JButton("添加类...")
@@ -110,6 +122,13 @@ class SelectMethodsDialog(
         container.add(rightButtonsPanel, BorderLayout.EAST)
 
         return container
+    }
+
+    // [新增] 公共方法，用于获取用户选择的作用域
+    fun getSelectedScope(): AnalysisScope {
+        return scopeRadioButtons.entries
+            .firstOrNull { it.value.isSelected }
+            ?.key ?: AnalysisScope.PRODUCTION // 如果没找到，默认返回 PRODUCTION
     }
 
     // [新增] 公共方法用于获取用户输入

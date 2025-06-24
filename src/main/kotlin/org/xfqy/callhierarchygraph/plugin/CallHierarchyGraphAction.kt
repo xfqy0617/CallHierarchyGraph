@@ -12,6 +12,7 @@ import com.intellij.openapi.progress.ProgressIndicator
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.progress.Task
 import com.intellij.openapi.project.Project
+import com.intellij.openapi.roots.ProjectFileIndex
 import com.intellij.openapi.wm.ToolWindowManager
 import com.intellij.psi.*
 import com.intellij.psi.search.GlobalSearchScope
@@ -106,13 +107,15 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
             // [新增] 从对话框获取路径和文件名
             val outputPath = dialog.getOutputPath()
             val outputFilename = dialog.getOutputFilename()
+            val selectedScope = dialog.getSelectedScope() // [新增] 获取选择的作用域
 
             // 简单的验证
             if (selectedMethods.isNotEmpty() && outputPath.isNotBlank() && outputFilename.isNotBlank()) {
                 val consoleView = getOrCreateConsole(project)
                 consoleView.clear()
                 // [修改] 将新获取的值传递给后台任务
-                runAnalysisInBackground(project, selectedMethods, consoleView, outputPath, outputFilename)
+//                runAnalysisInBackground(project, selectedMethods, consoleView, outputPath, outputFilename)
+                runAnalysisInBackground(project, selectedMethods, consoleView, outputPath, outputFilename, selectedScope)
             }
         }
     }
@@ -126,7 +129,8 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
         methods: List<PsiMethod>,
         consoleView: ConsoleView,
         outputPath: String,
-        outputFilename: String
+        outputFilename: String,
+        scope: AnalysisScope,
     ) {
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, "分析方法调用链", true) {
@@ -151,7 +155,8 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
                             project,
                             1,
                             setOf(targetMethod),
-                            indicator
+                            indicator,
+                            scope
                         )
 
                         // 4. 将调用链结果追加到总结果中
@@ -189,21 +194,41 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
         project: Project,
         indentLevel: Int,
         path: Set<PsiMethod>,
-        indicator: ProgressIndicator
+        indicator: ProgressIndicator,
+        scope: AnalysisScope // [新增]
     ): List<String> {
         indicator.checkCanceled()
-
-        // 存放当前层级及所有子层级的结果
         val resultLines = mutableListOf<String>()
 
+        // [重要] 核心过滤逻辑
         val callingMethods = ApplicationManager.getApplication().runReadAction<List<PsiMethod>> {
             val searchScope = GlobalSearchScope.projectScope(project)
             val references = ReferencesSearch.search(method, searchScope).findAll()
-            references
+
+            val allCallers = references
                 .mapNotNull { PsiTreeUtil.getParentOfType(it.element, PsiMethod::class.java) }
                 .distinct()
+
+            // 如果作用域是 "ALL"，则不过滤
+            if (scope == AnalysisScope.ALL) {
+                return@runReadAction allCallers
+            }
+
+            // 否则，根据作用域进行过滤
+            val projectFileIndex = ProjectFileIndex.getInstance(project)
+            allCallers.filter { caller ->
+                val virtualFile = caller.containingFile?.virtualFile ?: return@filter false
+                val isInTestSources = projectFileIndex.isInTestSourceContent(virtualFile)
+
+                when (scope) {
+                    AnalysisScope.PRODUCTION -> !isInTestSources // 仅生产代码：保留不在测试源中的
+                    AnalysisScope.TEST -> isInTestSources      // 仅测试代码：保留在测试源中的
+                    AnalysisScope.ALL -> true                  // 全部：保留所有 (理论上不会到这里，但为了完整性)
+                }
+            }
         }
 
+        // 后续的循环和递归逻辑完全不变
         for (caller in callingMethods) {
             val isInPath = ApplicationManager.getApplication().runReadAction<Boolean> { caller in path }
             if (isInPath) {
@@ -219,8 +244,8 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
 
             val newPath = ApplicationManager.getApplication().runReadAction<Set<PsiMethod>> { path + method }
 
-            // 递归调用，并将其返回的子调用链结果全部添加到当前结果列表中
-            val subCallLines = findAndPrintCallers(caller, project, indentLevel + 1, newPath, indicator)
+            // [修改] 将作用域参数继续传递给递归调用
+            val subCallLines = findAndPrintCallers(caller, project, indentLevel + 1, newPath, indicator, scope)
             resultLines.addAll(subCallLines)
         }
 
