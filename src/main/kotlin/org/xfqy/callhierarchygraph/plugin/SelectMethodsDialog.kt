@@ -154,7 +154,7 @@ class SelectMethodsDialog(
         val classContainerPanel = JPanel(BorderLayout())
         // [修复] 使用 UIUtil.getSeparatorColor() 获取标准的分隔线/边框颜色。
         // 这是兼容性非常好的一个API，用于UI元素的分隔。
-        classContainerPanel.border = BorderFactory.createLineBorder(UIUtil.getSeparatorColor())
+        classContainerPanel.border = BorderFactory.createLineBorder(UIUtil.CONTRAST_BORDER_COLOR)
 
         // --- 2. 创建带背景色和图标的标题栏 ---
         val headerPanel = JPanel(BorderLayout())
