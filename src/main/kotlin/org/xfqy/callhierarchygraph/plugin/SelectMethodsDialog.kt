@@ -1,5 +1,6 @@
 package org.xfqy.callhierarchygraph.plugin
 
+import com.intellij.icons.AllIcons
 import com.intellij.ide.util.TreeClassChooserFactory
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.fileChooser.FileChooserFactory
@@ -13,8 +14,10 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextField
 import com.intellij.util.ui.FormBuilder
 import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
 import java.awt.BorderLayout
 import java.awt.FlowLayout
+import java.awt.Font
 import java.nio.file.Paths
 import javax.swing.*
 
@@ -142,30 +145,39 @@ class SelectMethodsDialog(
             ?.key ?: AnalysisScope.PRODUCTION // 如果没找到，默认返回 PRODUCTION
     }
 
+    /**
+     * [UI增强最终修正版] 动态创建一个视觉层次感更强的“卡片式”面板，用于展示类和其方法。
+     * 该版本使用了兼容性更好的UIUtil API，确保在不同版本的IDE中都能正常编译和运行。
+     */
     private fun addClassPanel(psiClass: PsiClass, methodToSelect: PsiMethod?) {
-        // 1. 创建最外层的容器面板，使用 BorderLayout
+        // --- 1. 创建卡片式容器 ---
         val classContainerPanel = JPanel(BorderLayout())
-        classContainerPanel.border = BorderFactory.createCompoundBorder(
-            JBUI.Borders.customLine(JBUI.CurrentTheme.ToolWindow.borderColor(), 1, 0, 1, 0),
-            JBUI.Borders.empty(5, 5, 5, 5)
-        )
+        // [修复] 使用 UIUtil.getSeparatorColor() 获取标准的分隔线/边框颜色。
+        // 这是兼容性非常好的一个API，用于UI元素的分隔。
+        classContainerPanel.border = BorderFactory.createLineBorder(UIUtil.getSeparatorColor())
 
-        // 2. 创建自定义的标题面板
+        // --- 2. 创建带背景色和图标的标题栏 ---
         val headerPanel = JPanel(BorderLayout())
-        val masterCheckbox = JCheckBox() // 全选/全不选的主复选框
-        val classNameLabel = JLabel(psiClass.qualifiedName ?: psiClass.name)
-        classNameLabel.font = classNameLabel.font.deriveFont(java.awt.Font.BOLD) // 加粗显示类名
+        // [修复] 使用 UIUtil.getDecoratedRowColor() 获取用于装饰/高亮的背景色。
+        // 这个颜色通常用于表格的交替行或设置中的分组，非常适合作为标题栏背景。
+        headerPanel.background = UIUtil.getDecoratedRowColor()
+        headerPanel.isOpaque = true
+        headerPanel.border = JBUI.Borders.empty(8, 10)
+
+        val masterCheckbox = JCheckBox()
+        val classNameLabel = JLabel(psiClass.qualifiedName ?: psiClass.name, AllIcons.Nodes.Class, SwingConstants.LEFT)
+        classNameLabel.font = classNameLabel.font.deriveFont(Font.BOLD)
 
         val titleContentPanel = JPanel(FlowLayout(FlowLayout.LEFT, 0, 0))
+        titleContentPanel.isOpaque = false
         titleContentPanel.add(masterCheckbox)
-        titleContentPanel.add(Box.createHorizontalStrut(5)) // 增加一点间距
+        titleContentPanel.add(Box.createHorizontalStrut(8))
         titleContentPanel.add(classNameLabel)
-        headerPanel.add(titleContentPanel, BorderLayout.WEST)
-        headerPanel.border = JBUI.Borders.emptyBottom(5)
 
-        // 3. 创建方法列表
+        headerPanel.add(titleContentPanel, BorderLayout.CENTER)
+
+        // --- 3. 创建方法列表 ---
         val methodList = CheckBoxList<PsiMethod>()
-        // 过滤掉构造函数和私有方法，使列表更清晰
         val methodsToShow = psiClass.methods.filter { !it.isConstructor }
         methodsToShow.forEach { method ->
             methodList.addItem(
@@ -175,12 +187,10 @@ class SelectMethodsDialog(
             )
         }
 
-        // 检查初始状态，如果只有一个方法且被选中，或者所有方法都被预选，则主复选框也应被选中
         if (methodsToShow.isNotEmpty() && methodsToShow.all { it == methodToSelect }) {
             masterCheckbox.isSelected = true
         }
 
-        // 4. 为主复选框添加事件监听器
         masterCheckbox.addActionListener {
             val isSelected = masterCheckbox.isSelected
             for (i in 0 until methodList.itemsCount) {
@@ -189,16 +199,18 @@ class SelectMethodsDialog(
             methodList.repaint()
         }
 
-        // 5. 将所有组件组装到容器面板中
-        classContainerPanel.add(headerPanel, BorderLayout.NORTH)
-        classContainerPanel.add(JBScrollPane(methodList).apply { border = null }, BorderLayout.CENTER)
+        // --- 4. 将方法列表放入带内边距的滚动面板中 ---
+        val methodScrollPane = JBScrollPane(methodList)
+        methodScrollPane.border = JBUI.Borders.empty(5, 20, 10, 10)
 
-        // 存储列表以便之后获取选中的方法
+        // --- 5. 组装最终的卡片 ---
+        classContainerPanel.add(headerPanel, BorderLayout.NORTH)
+        classContainerPanel.add(methodScrollPane, BorderLayout.CENTER)
+
         classMethodLists[psiClass] = methodList
 
-        // 将最终完成的类面板添加到主面板
         mainPanel.add(classContainerPanel)
-        mainPanel.add(Box.createVerticalStrut(10)) // 增加类与类之间的垂直间距
+        mainPanel.add(Box.createVerticalStrut(10))
         mainPanel.revalidate()
         mainPanel.repaint()
     }
