@@ -3,6 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <title>Call Hierarchy Graph</title>
+    <!-- [核心修复] 将 jQuery 移到 head 中，确保它最先加载 -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+
+    <!-- 依赖库 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
+    <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
+    <script src="https://unpkg.com/cytoscape-dagre@2.4.0/cytoscape-dagre.js"></script>
+    <script src="https://unpkg.com/cytoscape-node-html-label@1.2.0/dist/cytoscape-node-html-label.min.js"></script>
+
     <style>
         /* --- Basic Layout & Theming --- */
         body, html {
@@ -14,6 +23,10 @@
         #cy {
             flex-grow: 1; position: relative;
             background-color: #f8f9fa;
+            transition: background-color 0.4s ease;
+        }
+        body.highlight-active #cy {
+            background-color: #e9ecef;
         }
 
         /* --- Control Panel --- */
@@ -22,6 +35,8 @@
             padding: 10px 20px; background-color: #ffffff;
             border-bottom: 1px solid #e9ecef; flex-shrink: 0;
             box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            position: relative;
+            z-index: 10;
         }
         .control-group { display: flex; align-items: center; gap: 8px; }
         .control-group label { font-size: 13px; font-weight: 500; color: #495057; }
@@ -36,23 +51,18 @@
         #reset-button { background-color: #6c757d; border-color: #6c757d; }
         #reset-button:hover { background-color: #5a6268; }
 
-        /* --- [核心优化] Node Card Styling --- */
+        /* --- Node Card & Interaction Styling --- */
         .node-card {
             font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-            /* 背景色将由JS动态设置 */
-            border: 1px solid #e0e0e0;
+            border: 1px solid rgba(0,0,0,0.1);
             border-radius: 6px;
             padding: 10px 12px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.08);
-            width: 300px; /* 固定宽度以保持统一 */
-            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            width: 300px;
             user-select: text;
-            pointer-events: none; /* 让点击事件穿透到下层节点 */
+            pointer-events: none;
             text-align: left;
-        }
-        .node-card:hover { /* 保留微妙的悬浮效果 */
-            transform: translateY(-2px);
-            box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+            transition: opacity 0.4s ease, filter 0.4s ease, transform 0.3s ease, box-shadow 0.3s ease;
         }
         .node-class-name {
             font-size: 14px;
@@ -78,12 +88,18 @@
             border-top: 1px dashed #eee;
             padding-top: 4px;
         }
+
+        .node-card.dimmed {
+            opacity: 0.1;
+            filter: grayscale(100%);
+        }
+        .node-card.highlighted {
+            opacity: 1 !important;
+            filter: none !important;
+            transform: scale(1.02);
+            box-shadow: 0 5px 20px rgba(0, 123, 255, 0.4);
+        }
     </style>
-    <!-- 依赖库 -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
-    <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
-    <script src="https://unpkg.com/cytoscape-dagre@2.4.0/cytoscape-dagre.js"></script>
-    <script src="https://unpkg.com/cytoscape-node-html-label@1.2.0/dist/cytoscape-node-html-label.min.js"></script>
 </head>
 <body>
 
@@ -107,6 +123,7 @@
 <div id="cy"></div>
 
 <script>
+    // 由于 jQuery 已在 head 中加载，这里的代码可以安全地使用 $
     if(typeof cytoscapeNodeHtmlLabel === 'function'){
         cytoscape.use(cytoscapeNodeHtmlLabel);
     }
@@ -130,111 +147,105 @@
                 {
                     selector: 'node',
                     style: {
-                        'background-opacity': 0,
-                        'border-width': 0,
-                        'width': 320,
-                        'height': 110,
-                        'shape': 'rectangle'
+                        'background-opacity': 0, 'border-width': 0,
+                        'width': 320, 'height': 110, 'shape': 'rectangle'
                     }
                 },
                 {
                     selector: 'edge',
                     style: {
-                        'width': 2.5,
-                        'line-color': '#adb5bd',
-                        'target-arrow-color': '#adb5bd',
-                        'target-arrow-shape': 'triangle',
-                        'curve-style': 'bezier'
+                        'width': 2, 'line-color': '#adb5bd', 'target-arrow-color': '#adb5bd',
+                        'target-arrow-shape': 'triangle', 'curve-style': 'bezier',
+                        'transition-property': 'line-color, target-arrow-color, width, opacity',
+                        'transition-duration': '0.3s'
                     }
                 },
                 {
                     selector: 'edge.highlighted',
                     style: {
-                        'line-color': '#007bff',
-                        'target-arrow-color': '#007bff',
-                        'width': 4,
-                        'z-index': 100
+                        'line-color': '#007bff', 'target-arrow-color': '#007bff',
+                        'width': 3.5, 'opacity': 1, 'z-index': 100
                     }
                 },
                 {
                     selector: 'edge.dimmed',
-                    style: { 'opacity': 0.2 }
+                    style: { 'opacity': 0.1 }
                 }
             ],
             layout: { name: 'dagre', rankDir: 'LR', spacingFactor: 1.5 }
         });
 
-        // [核心修改] 初始化HTML标签，使用新的模板和样式逻辑
         cy.nodeHtmlLabel([
             {
-                query: 'node',
-                valign: "center",
-                halign: "center",
+                query: 'node', valign: "center", halign: "center",
                 tpl: function(data) {
-                    let borderStyle = '';
-                    let bgColor = '';
-
-                    // 根据节点类型设置左侧边框颜色和背景色
+                    let borderStyle = '', bgColor = '';
                     switch(data.nodeType) {
                         case 'ROOT':
-                            borderStyle = 'border-left: 5px solid #b0bec5;'; // Slate Gray
-                            bgColor = '#eceff1'; // Lighter Slate
+                            borderStyle = 'border-left: 5px solid #b0bec5;';
+                            bgColor = '#eceff1';
                             break;
                         case 'LEAF':
-                            borderStyle = 'border-left: 5px solid #66bb6a;'; // Soft Green
-                            bgColor = '#e8f5e9'; // Lighter Green
+                            borderStyle = 'border-left: 5px solid #66bb6a;';
+                            bgColor = '#e8f5e9';
                             break;
-                        case 'INTERMEDIATE':
-                        default:
-                            borderStyle = 'border-left: 5px solid #42a5f5;'; // Soft Blue
-                            bgColor = '#e3f2fd'; // Lighter Blue
+                        default: // INTERMEDIATE
+                            borderStyle = 'border-left: 5px solid #42a5f5;';
+                            bgColor = '#e3f2fd';
                             break;
                     }
-
-                    // 最终的样式组合
                     const finalStyle = `${borderStyle} background-color: ${bgColor};`;
-
-                    // 返回最终的卡片HTML结构（已移除徽章）
                     return `
                         <div id="card-${data.id}" class="node-card" style="${finalStyle}">
-                            <div class="node-class-name" style="font-size=20px; color: ${data.classColor};" title="${data.className}">${data.className}</div>
-                            <div class="node-method-name" style="font-size=16px;" title="${data.methodName}">${data.methodName}</div>
-                            <div class="node-params" style="font-size=5px;" title="${data.params}">(${data.params})</div>
-                            <div class="node-package-name" style="font-size=5px;" title="${data.packageName}">${data.packageName}</div>
+                            <div class="node-class-name" style="color: ${data.classColor};" title="${data.className}">${data.className}</div>
+                            <div class="node-method-name" title="${data.methodName}">${data.methodName}</div>
+                            <div class="node-params" title="${data.params}">(${data.params})</div>
+                            <div class="node-package-name" title="${data.packageName}">${data.packageName}</div>
                         </div>
                     `;
                 }
             }
         ]);
 
-        // --- 交互逻辑 (需要jQuery) ---
-        function highlightPath(node) {
-            const path = node.union(node.successors()).union(node.predecessors());
-            const edges = path.edgesWith(path);
+        // --- 交互逻辑 (现在可以安全地工作了) ---
+        function highlightElements(elementsToShow) {
+            document.body.classList.add('highlight-active');
 
+            // 黯淡所有元素
             cy.elements().addClass('dimmed');
-            $('.node-card').css('opacity', 0.3);
+            $('.node-card').addClass('dimmed').removeClass('highlighted');
 
-            path.removeClass('dimmed');
-            edges.removeClass('dimmed').addClass('highlighted');
+            // 高亮选中的路径
+            elementsToShow.removeClass('dimmed').addClass('highlighted');
 
-            path.forEach(n => {
-                if (n.isNode()) {
-                    $(`#card-${n.id()}`).css('opacity', 1.0);
-                }
+            elementsToShow.nodes().forEach(node => {
+                $(`#card-${node.id()}`).removeClass('dimmed').addClass('highlighted');
             });
         }
 
         function resetHighlight() {
-            cy.elements().removeClass('highlighted').removeClass('dimmed');
-            $('.node-card').css('opacity', 1.0);
+            document.body.classList.remove('highlight-active');
+            cy.elements().removeClass('dimmed highlighted');
+            $('.node-card').removeClass('dimmed highlighted');
         }
 
-        cy.on('tap', 'node', (evt) => highlightPath(evt.target));
+        cy.on('tap', 'node', (evt) => {
+            const node = evt.target;
+            const path = node.union(node.predecessors()).union(node.successors());
+            highlightElements(path);
+        });
+
         cy.on('tap', (evt) => { if (evt.target === cy) resetHighlight(); });
 
-        document.getElementById('layout-select').addEventListener('change', function () { cy.layout({ name: this.value, rankDir: 'LR', animate: true, spacingFactor: 1.5 }).run(); });
-        document.getElementById('reset-button').addEventListener('click', () => { resetHighlight(); document.getElementById('search-input').value = ''; cy.fit(null, 50); });
+        document.getElementById('reset-button').addEventListener('click', () => {
+            resetHighlight();
+            document.getElementById('search-input').value = '';
+            cy.fit(null, 50);
+        });
+
+        document.getElementById('layout-select').addEventListener('change', function () {
+            cy.layout({ name: this.value, rankDir: 'LR', animate: true, spacingFactor: 1.5 }).run();
+        });
 
         let timeout;
         document.getElementById('search-input').addEventListener('input', function() {
@@ -243,6 +254,7 @@
             timeout = setTimeout(() => {
                 resetHighlight();
                 if (!query) return;
+
                 const searchResults = cy.nodes().filter(node =>
                     node.data('className').toLowerCase().includes(query) ||
                     node.data('methodName').toLowerCase().includes(query) ||
@@ -250,19 +262,12 @@
                 );
 
                 if (searchResults.length > 0) {
-                    cy.elements().addClass('dimmed');
-                    $('.node-card').css('opacity', 0.3);
-                    searchResults.removeClass('dimmed');
-                    searchResults.forEach(n => {
-                        $(`#card-${n.id()}`).css('opacity', 1.0);
-                    });
+                    highlightElements(searchResults);
                 }
             }, 300);
         });
 
-        const script = document.createElement('script');
-        script.src = "https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js";
-        document.head.appendChild(script);
+        // jQuery的加载标签已移至head，此处无需再添加
     });
 </script>
 </body>
