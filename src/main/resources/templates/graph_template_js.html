@@ -8,54 +8,93 @@
         body, html {
             margin: 0; padding: 0; height: 100%;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background-color: #f7f7f7;
+            background-color: #f8f9fa; /* Slightly lighter gray background */
             overflow: hidden; display: flex; flex-direction: column;
         }
         #cy {
             flex-grow: 1; position: relative;
-            background-color: #ffffff; border-top: 1px solid #e0e0e0;
+            background-color: #f8f9fa;
         }
 
-        /* --- Control Panel (unchanged) --- */
+        /* --- Control Panel --- */
         .controls {
-            display: flex; align-items: center; gap: 12px;
-            padding: 10px 15px; background-color: #ffffff;
-            border-bottom: 1px solid #e0e0e0; flex-shrink: 0;
+            display: flex; align-items: center; gap: 16px;
+            padding: 10px 20px; background-color: #ffffff;
+            border-bottom: 1px solid #e9ecef; flex-shrink: 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
         .control-group { display: flex; align-items: center; gap: 8px; }
-        .control-group label { font-size: 13px; font-weight: 500; color: #555; }
+        .control-group label { font-size: 13px; font-weight: 500; color: #495057; }
         select, input[type="text"], button {
-            padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc;
+            padding: 6px 12px; border-radius: 6px; border: 1px solid #ced4da;
             font-size: 13px; background-color: #fff;
             transition: border-color 0.2s, box-shadow 0.2s;
         }
-        select:focus, input[type="text"]:focus { outline: none; border-color: #007aff; box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2); }
-        button { cursor: pointer; background-color: #007aff; color: white; border-color: #007aff; font-weight: 500; }
-        button:hover { background-color: #005ecb; }
+        select:focus, input[type="text"]:focus { outline: none; border-color: #80bdff; box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25); }
+        button { cursor: pointer; background-color: #007bff; color: white; border-color: #007bff; font-weight: 500; }
+        button:hover { background-color: #0069d9; }
         #reset-button { background-color: #6c757d; border-color: #6c757d; }
         #reset-button:hover { background-color: #5a6268; }
 
-        /* --- [新增] HTML 标签的样式 --- */
-        .cy-node-html-label {
-            /* 让标签内容可被选中，方便复制 */
+        /* --- [核心优化] Node Card Styling --- */
+        .node-card {
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; /* Use a monospace font for code */
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            padding: 10px 12px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+            width: 300px; /* Fixed width for uniform look */
+            transition: all 0.2s ease-in-out;
             user-select: text;
+            pointer-events: none; /* Let clicks pass through to the underlying node */
             text-align: left;
-            line-height: 1.2;
-            /* 关键：让鼠标点击事件穿透标签，作用于其下的节点 */
-            pointer-events: none;
-            /* 添加一个半透明背景和轻微的阴影，增强在复杂背景下的可读性 */
-            background: rgba(255, 255, 255, 0.8);
-            padding: 8px;
+        }
+        .node-card:hover { /* Subtle hover effect */
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+        }
+        .node-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .node-class-name {
+            font-size: 14px;
+            font-weight: bold;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .node-type-badge {
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 6px;
             border-radius: 4px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            color: #fff;
+        }
+        .node-method-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #00529b; /* Darker blue for method name */
+            margin-bottom: 4px;
+        }
+        .node-params, .node-package-name {
+            font-size: 11px;
+            color: #6c757d;
+            line-height: 1.3;
+        }
+        .node-package-name {
+            margin-top: 6px;
+            border-top: 1px dashed #eee;
+            padding-top: 4px;
         }
     </style>
-    <!-- 引入 Cytoscape.js 核心库 -->
+    <!-- 依赖库保持不变 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
-    <!-- 引入布局算法 -->
     <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
     <script src="https://unpkg.com/cytoscape-dagre@2.4.0/cytoscape-dagre.js"></script>
-    <!-- [核心新增] 引入 cytoscape-node-html-label 扩展 -->
     <script src="https://unpkg.com/cytoscape-node-html-label@1.2.0/dist/cytoscape-node-html-label.min.js"></script>
 </head>
 <body>
@@ -81,7 +120,6 @@
 <div id="cy"></div>
 
 <script>
-    // 确保 cytoscape-node-html-label 扩展已注册
     if(typeof cytoscapeNodeHtmlLabel === 'function'){
         cytoscape.use(cytoscapeNodeHtmlLabel);
     }
@@ -98,76 +136,157 @@
         const cy = cytoscape({
             container: document.getElementById('cy'),
             elements: {
-                // 节点和边的定义保持不变
                 nodes: graphData.nodes.map(node => ({ data: { id: node.id, ...node } })),
                 edges: graphData.edges.map(edge => ({ data: { id: `edge_${edge.source}_${edge.target}`, source: edge.source, target: edge.target } }))
             },
             style: [
                 {
+                    // [核心修改] 1. 让原生节点完全透明，只作为交互和布局的骨架
                     selector: 'node',
                     style: {
-                        // [修改] 节点本身现在只是一个背景板，不再需要处理标签
-                        'shape': 'round-rectangle',
-                        'width': 200,  // 提供一个足够大的背景宽度
-                        'height': 80, // 提供一个足够大的背景高度
-                        // 节点背景色逻辑保持不变
+                        'background-opacity': 0,
+                        'border-width': 0,
+                        // 让节点的大小适应其HTML标签，确保有足够的点击区域
+                        'width': 320,  // 比卡片稍宽
+                        'height': 110, // 比卡片稍高
+                        'shape': 'rectangle'
                     }
                 },
-                // 节点背景色逻辑 (保持不变)
-                { selector: 'node[nodeType="INTERMEDIATE"]', style: { 'background-color': '#B6E8F3' } },
-                { selector: 'node[nodeType="ROOT"]', style: { 'background-color': '#E0E0E0' } },
-                { selector: 'node[nodeType="LEAF"]', style: { 'background-color': '#D2EEC1' } },
-                // 分析入口点样式 (保持不变)
-                { selector: 'node[?isEntry]', style: { 'border-style': 'double', 'border-width': 6, 'border-color': '#FFD700' } },
+                // [核心修改] 2. 移除所有旧的节点背景色和边框样式，它们将被HTML卡片取代
+                // { selector: 'node[nodeType="..."]', ... }, <-- 已移除
+                // { selector: 'node[?isEntry]', ... },      <-- 已移除
 
-                // 边和高亮样式 (保持不变)
-                { selector: 'edge', style: { 'width': 2, 'line-color': '#b3b3b3', 'target-arrow-color': '#b3b3b3', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier' } },
-                { selector: '.highlighted', style: { 'background-color': '#007aff', 'line-color': '#007aff', 'target-arrow-color': '#007aff', 'border-color': '#007aff', 'transition-property': 'background-color, line-color, target-arrow-color, border-color', 'transition-duration': '0.2s' } },
-                { selector: '.dimmed', style: { 'opacity': 0.2 } }
+                // 边的样式保持不变，但可以微调颜色以匹配新主题
+                {
+                    selector: 'edge',
+                    style: {
+                        'width': 2.5,
+                        'line-color': '#adb5bd',
+                        'target-arrow-color': '#adb5bd',
+                        'target-arrow-shape': 'triangle',
+                        'curve-style': 'bezier'
+                    }
+                },
+                // [核心修改] 3. 高亮样式现在只作用于边和HTML标签，而非节点本身
+                {
+                    selector: 'edge.highlighted', // 只高亮边
+                    style: {
+                        'line-color': '#007bff',
+                        'target-arrow-color': '#007bff',
+                        'width': 4,
+                        'z-index': 100
+                    }
+                },
+                {
+                    selector: 'edge.dimmed', // 只虚化边
+                    style: { 'opacity': 0.2 }
+                }
             ],
             layout: { name: 'dagre', rankDir: 'LR', spacingFactor: 1.5 }
         });
 
-        // --- [核心新增] 初始化 HTML 标签 ---
+        // [核心修改] 4. 初始化HTML标签，使用全新的、信息更丰富的模板
         cy.nodeHtmlLabel([
             {
-                query: 'node', // 对所有节点应用此规则
-                valign: "center", // 垂直居中
-                halign: "center", // 水平居中
-                // tpl (template) 函数是关键，它返回每个节点要显示的HTML字符串
+                query: 'node',
+                valign: "center",
+                halign: "center",
+                // tpl函数现在负责构建整个卡片的HTML和内联样式
                 tpl: function(data) {
-                    // 使用模板字符串动态构建符合您要求的HTML
+                    let cardStyle = '';
+                    let badgeBgColor = '';
+                    let nodeTypeText = data.nodeType;
+
+                    // 根据节点类型设置侧边框颜色和徽章背景色
+                    switch(data.nodeType) {
+                        case 'ROOT':
+                            cardStyle = 'border-left: 5px solid #6c757d;'; // Gray
+                            badgeBgColor = '#6c757d';
+                            break;
+                        case 'LEAF':
+                            cardStyle = 'border-left: 5px solid #28a745;'; // Green
+                            badgeBgColor = '#28a745';
+                            break;
+                        case 'INTERMEDIATE':
+                        default:
+                            cardStyle = 'border-left: 5px solid #17a2b8;'; // Teal
+                            badgeBgColor = '#17a2b8';
+                            break;
+                    }
+
+                    // 如果是入口点，使用更强的视觉提示覆盖之前的样式
+                    if (data.isEntry) {
+                        cardStyle = `
+                            border: 2px solid #fd7e14;
+                            box-shadow: 0 0 12px rgba(253, 126, 20, 0.6);
+                        `;
+                        nodeTypeText += ' (ENTRY)';
+                    }
+
+                    // 返回最终的卡片HTML结构
                     return `
-                        <div class="cy-node-html-label">
-                            <div style="font-size: 14px; font-weight: bold; color: ${data.classColor};">${data.className}</div>
-                            <div style="font-size: 12px; font-weight: bold; color: #0062c4;">${data.methodName}</div>
-                            <div style="font-size: 8px; color: #666666;">(${data.params})</div>
-                            <div style="font-size: 8px; color: #a8a8a8;">${data.packageName}</div>
+                        <div id="card-${data.id}" class="node-card" style="${cardStyle}">
+                            <div class="node-header">
+                                <div class="node-class-name" style="color: ${data.classColor};" title="${data.className}">${data.className}</div>
+                                <div class="node-type-badge" style="background-color: ${badgeBgColor};">${nodeTypeText}</div>
+                            </div>
+                            <div class="node-method-name" title="${data.methodName}">${data.methodName}</div>
+                            <div class="node-params" title="${data.params}">(${data.params})</div>
+                            <div class="node-package-name" title="${data.packageName}">${data.packageName}</div>
                         </div>
                     `;
                 }
             }
         ]);
 
-        // --- 交互逻辑 (需要微调搜索) ---
+        // --- 交互逻辑微调 ---
+        function highlightPath(node) {
+            // 获取所有相关的节点和边
+            const upstreamNodes = node.predecessors('node');
+            const downstreamNodes = node.successors('node');
+            const upstreamEdges = node.predecessors('edge');
+            const downstreamEdges = node.successors('edge');
+
+            // 先把所有元素置为虚化状态
+            cy.elements().addClass('dimmed');
+            $('.node-card').css('opacity', 0.3); // 虚化所有HTML卡片
+
+            // 组合所有需要高亮的元素
+            const highlightCollection = node.union(upstreamNodes).union(downstreamNodes);
+            const highlightEdges = upstreamEdges.union(downstreamEdges);
+
+            // 移除虚化，添加高亮
+            highlightCollection.removeClass('dimmed');
+            highlightEdges.removeClass('dimmed').addClass('highlighted');
+
+            // 高亮对应的HTML卡片
+            highlightCollection.forEach(n => {
+                $(`#card-${n.id()}`).css('opacity', 1.0);
+            });
+        }
+
+        function resetHighlight() {
+            cy.elements().removeClass('highlighted').removeClass('dimmed');
+            $('.node-card').css('opacity', 1.0); // 恢复所有卡片的不透明度
+        }
+
         cy.on('tap', 'node', function (evt) {
-            const node = evt.target;
-            const highlightCollection = node.union(node.successors()).union(node.predecessors());
-            cy.elements().removeClass('highlighted').addClass('dimmed');
-            highlightCollection.removeClass('dimmed').addClass('highlighted');
+            highlightPath(evt.target);
         });
-        cy.on('tap', (evt) => { if (evt.target === cy) { cy.elements().removeClass('highlighted').removeClass('dimmed'); } });
+
+        cy.on('tap', (evt) => { if (evt.target === cy) { resetHighlight(); } });
+
+        // 其他控制逻辑保持不变
         document.getElementById('layout-select').addEventListener('change', function () { cy.layout({ name: this.value, rankDir: 'LR', animate: true, spacingFactor: 1.5 }).run(); });
+        document.getElementById('reset-button').addEventListener('click', () => { resetHighlight(); document.getElementById('search-input').value = ''; cy.fit(null, 50); });
 
         let timeout;
         document.getElementById('search-input').addEventListener('input', function() {
             const query = this.value.toLowerCase().trim();
             clearTimeout(timeout);
             timeout = setTimeout(() => {
-                cy.elements().removeClass('highlighted').removeClass('dimmed');
+                resetHighlight();
                 if (!query) return;
-
-                // [修改] 搜索现在需要检查每个数据字段
                 const searchResults = cy.nodes().filter(node =>
                     node.data('className').toLowerCase().includes(query) ||
                     node.data('methodName').toLowerCase().includes(query) ||
@@ -175,16 +294,23 @@
                 );
 
                 if (searchResults.length > 0) {
-                    cy.elements().difference(searchResults).addClass('dimmed');
-                    searchResults.addClass('highlighted');
+                    cy.elements().addClass('dimmed');
+                    $('.node-card').css('opacity', 0.3);
+                    searchResults.removeClass('dimmed');
+                    searchResults.forEach(n => {
+                        $(`#card-${n.id()}`).css('opacity', 1.0);
+                    });
                 }
             }, 300);
         });
-        document.getElementById('reset-button').addEventListener('click', () => {
-            cy.elements().removeClass('highlighted').removeClass('dimmed');
-            document.getElementById('search-input').value = '';
-            cy.fit(); cy.center();
-        });
+
+        // 引入jQuery以便于操作DOM，如果不想引入，可以用原生JS替代
+        const script = document.createElement('script');
+        script.src = "https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js";
+        script.onload = () => {
+            // 交互逻辑需要jQuery，确保它加载后再执行
+        };
+        document.head.appendChild(script);
     });
 </script>
 </body>
