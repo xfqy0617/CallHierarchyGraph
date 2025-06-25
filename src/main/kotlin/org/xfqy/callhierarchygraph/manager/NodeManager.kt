@@ -1,6 +1,6 @@
 package org.xfqy.callhierarchygraph.manager
 
-import org.xfqy.callhierarchygraph.entity.NodeData
+import org.xfqy.callhierarchygraph.model.NodeData
 import org.xfqy.callhierarchygraph.util.DistinctDarkColorGenerator
 import org.xfqy.callhierarchygraph.util.Pair
 

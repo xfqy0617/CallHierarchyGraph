@@ -2,12 +2,11 @@
 package org.xfqy.callhierarchygraph.visualizer
 
 import com.google.gson.GsonBuilder
-import org.xfqy.callhierarchygraph.entity.GraphData
+import org.xfqy.callhierarchygraph.model.GraphData
 import java.awt.Desktop
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
-import java.nio.file.Path
 import java.nio.file.Paths
 
 private const val TEMPLATE_PATH = "templates/graph_template_js.html" // 使用新的模板

@@ -18,9 +18,9 @@ import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.ui.content.ContentFactory
-import org.xfqy.callhierarchygraph.entity.EdgeData
-import org.xfqy.callhierarchygraph.entity.GraphData
-import org.xfqy.callhierarchygraph.entity.NodeData
+import org.xfqy.callhierarchygraph.model.EdgeData
+import org.xfqy.callhierarchygraph.model.GraphData
+import org.xfqy.callhierarchygraph.model.NodeData
 import org.xfqy.callhierarchygraph.manager.NodeManager
 import org.xfqy.callhierarchygraph.visualizer.CallHierarchyVisualizer
 import java.io.File

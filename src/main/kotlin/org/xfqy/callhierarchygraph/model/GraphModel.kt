@@ -1,4 +1,4 @@
-package org.xfqy.callhierarchygraph.entity
+package org.xfqy.callhierarchygraph.model
 
 // 顶层数据结构
 data class GraphData(
