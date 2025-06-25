@@ -79,13 +79,12 @@
             background-color: #6c757d;
             border-color: #6c757d;
         }
+
         #reset-button:hover {
             background-color: #5a6268;
         }
     </style>
-    <!-- 1. 引入 Cytoscape.js 核心库 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
-    <!-- 2. 引入 Dagre 布局算法，非常适合有向图 -->
     <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
     <script src="https://unpkg.com/cytoscape-dagre@2.4.0/cytoscape-dagre.js"></script>
 </head>
@@ -112,7 +111,6 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        // 这是我们的数据“契约”，由 Kotlin 后端注入
         const graphData = '{graph_data_placeholder}';
 
         if (!graphData || !graphData.nodes || !graphData.edges) {
@@ -121,16 +119,14 @@
             return;
         }
 
-        // --- 1. 初始化 Cytoscape ---
         const cy = cytoscape({
             container: document.getElementById('cy'),
             elements: {
                 nodes: graphData.nodes.map(node => ({
                     data: {
                         id: node.id,
-                        label: `${node.methodName}(${node.params})`, // 主标签显示方法名和参数
-                        fullLabel: `${node.className}\n${node.methodName}(${node.params})\n${node.packageName}`, // 用于搜索和提示
-                        ...node // 将所有原始数据附加到 data 对象
+                        fullLabel: `${node.className}\n${node.methodName}(${node.params})\n${node.packageName}`,
+                        ...node
                     }
                 })),
                 edges: graphData.edges.map(edge => ({
@@ -141,36 +137,44 @@
                     }
                 }))
             },
-
-            // --- 2. 定义样式 ---
             style: [
                 {
                     selector: 'node',
                     style: {
                         'shape': 'round-rectangle',
-                        'width': 'label', // 节点宽度适应标签
+                        'width': 'label',
                         'height': 'label',
-                        'padding': '10px',
-                        'background-color': 'data(classColor)', // 使用后端生成的类颜色
-                        'color': '#ffffff', // 白色文字
-                        'label': 'data(label)',
-                        'font-size': '12px',
+                        'padding': '12px',
+                        'label': (ele) => `${ele.data('className')}\n${ele.data('methodName')}`,
+                        'text-wrap': 'wrap',
+                        'text-max-width': '200px',
                         'text-valign': 'center',
                         'text-halign': 'center',
-                        'text-wrap': 'wrap',
-                        'text-max-width': '180px', // 防止标签过长
-                        'text-outline-width': 2,
-                        'text-outline-color': 'data(classColor)', // 文字描边，增强可读性
-                        'border-width': 2,
-                        'border-color': '#555'
+                        'font-weight': 'bold',
+                        'font-size': '14px',
+                        'color': '#0062c4', // Method name color
+                        'border-color': 'data(classColor)', // Class color on border
+                        'border-width': 4
                     }
                 },
-                { // 为根节点（分析入口）添加特殊样式
-                    selector: 'node[?isRoot]',
+                { // 普通节点 - 粉蓝色
+                    selector: 'node[nodeType="INTERMEDIATE"]',
+                    style: {'background-color': '#B6E8F3'}
+                },
+                { // 调用链顶端 (无出度) - 灰色
+                    selector: 'node[nodeType="ROOT"]',
+                    style: {'background-color': '#E0E0E0'}
+                },
+                { // 调用链末端 (无入度) - 淡绿色
+                    selector: 'node[nodeType="LEAF"]',
+                    style: {'background-color': '#D2EEC1'}
+                },
+                { // 分析入口点的特殊样式
+                    selector: 'node[?isEntry]',
                     style: {
-                        'border-color': '#FFD700', // 金色边框
-                        'border-width': 4,
-                        'shape': 'diamond'
+                        'border-style': 'double',
+                        'border-width': 6,
+                        'border-color': '#FFD700'
                     }
                 },
                 {
@@ -183,66 +187,49 @@
                         'curve-style': 'bezier'
                     }
                 },
-                // --- 交互样式 ---
                 {
                     selector: '.highlighted',
                     style: {
                         'background-color': '#007aff',
                         'line-color': '#007aff',
                         'target-arrow-color': '#007aff',
-                        'transition-property': 'background-color, line-color, target-arrow-color',
+                        'border-color': '#007aff',
+                        'transition-property': 'background-color, line-color, target-arrow-color, border-color',
                         'transition-duration': '0.2s'
                     }
                 },
                 {
                     selector: '.dimmed',
-                    style: { 'opacity': 0.2 }
+                    style: {'opacity': 0.2}
                 }
             ],
-
-            // --- 3. 初始布局 ---
             layout: {
                 name: 'dagre',
-                rankDir: 'LR', // Left-to-Right
+                rankDir: 'LR',
                 spacingFactor: 1.2
             }
         });
 
-        // --- 4. 绑定交互事件 ---
-
-        // 点击节点高亮其调用链
+        // Interaction logic
         cy.on('tap', 'node', function (evt) {
             const node = evt.target;
-            cy.elements().removeClass('highlighted').removeClass('dimmed');
-
-            // 高亮当前节点、所有上游（调用者）和下游（被调用者）
             const highlightCollection = node.union(node.successors()).union(node.predecessors());
-
-            cy.elements().difference(highlightCollection).addClass('dimmed');
-            highlightCollection.addClass('highlighted');
+            cy.elements().removeClass('highlighted').addClass('dimmed');
+            highlightCollection.removeClass('dimmed').addClass('highlighted');
         });
 
-        // 点击画布空白处，清除所有高亮
         cy.on('tap', function (evt) {
             if (evt.target === cy) {
                 cy.elements().removeClass('highlighted').removeClass('dimmed');
             }
         });
 
-        // 布局切换
         document.getElementById('layout-select').addEventListener('change', function () {
-            const layoutName = this.value;
-            cy.layout({
-                name: layoutName,
-                rankDir: 'LR',
-                animate: true,
-                spacingFactor: 1.2
-            }).run();
+            cy.layout({name: this.value, rankDir: 'LR', animate: true, spacingFactor: 1.2}).run();
         });
 
-        // 搜索功能
         let timeout;
-        document.getElementById('search-input').addEventListener('input', function() {
+        document.getElementById('search-input').addEventListener('input', function () {
             const query = this.value.toLowerCase().trim();
             clearTimeout(timeout);
             timeout = setTimeout(() => {
@@ -257,17 +244,15 @@
                     cy.elements().difference(searchResults).addClass('dimmed');
                     searchResults.addClass('highlighted');
                 }
-            }, 300); // Debounce search
+            }, 300);
         });
 
-        // 重置按钮
-        document.getElementById('reset-button').addEventListener('click', function() {
+        document.getElementById('reset-button').addEventListener('click', function () {
             cy.elements().removeClass('highlighted').removeClass('dimmed');
             document.getElementById('search-input').value = '';
-            cy.fit(); // 视图恢复到初始大小和位置
+            cy.fit();
             cy.center();
         });
-
     });
 </script>
 </body>

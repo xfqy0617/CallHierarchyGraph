@@ -1,25 +1,32 @@
 package org.xfqy.callhierarchygraph.model
 
-import org.jsoup.select.Evaluator.IsRoot
-
-// 顶层数据结构
+/**
+ * 图数据的顶层容器，可被序列化为 JSON。
+ */
 data class GraphData(
     val nodes: List<NodeData>,
     val edges: List<EdgeData>
 )
 
-// 节点信息
+/**
+ * 定义单个节点的数据结构。
+ * 每个字段都将成为 JSON 中的一个 key。
+ */
 data class NodeData(
-    val id: String,          // 唯一ID，例如 "node1", "node2"
+    val id: String,          // 节点的唯一ID, e.g., "node1"
     val className: String,
     val methodName: String,
     val params: String,
     val packageName: String,
-    val classColor: String,   // 由后端生成的类颜色
-    val isRoot: Boolean
+    val classColor: String,  // 后端生成的、用于UI提示的颜色
+    val isEntry: Boolean,      // 标记是否为用户选择的分析入口点
+    val nodeType: String   // 新增: "ROOT", "LEAF", "INTERMEDIATE"
 )
 
-// 边信息
+/**
+ * 定义单条边的数据结构。
+ * 表示从 'source' 节点到 'target' 节点的有向连接。
+ */
 data class EdgeData(
     val source: String,      // 源节点 ID
     val target: String       // 目标节点 ID

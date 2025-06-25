@@ -19,10 +19,10 @@ class NodeManager {
     /**
      * 根据方法的全限定内容，生成或获取其唯一的ID和对应的NodeData对象。
      * @param fullNodeContent 格式化后的方法字符串。
-     * @param isRoot 标记这个节点是否是分析的起点。
+     * @param isEntry 标记这个节点是否是分析的起点。
      * @return 返回包含唯一ID和NodeData的Pair。
      */
-    fun getOrGenerateNode(fullNodeContent: String, isRoot: Boolean = false): Pair<String, NodeData> {
+    fun getOrGenerateNode(fullNodeContent: String, isEntry: Boolean = false): Pair<String, NodeData> {
         val uniqueId = nodeContentToIdMap.computeIfAbsent(fullNodeContent) {
             "node${nodeCounter++}"
         }
@@ -36,13 +36,14 @@ class NodeManager {
                 params = nodeInfo.param,
                 packageName = nodeInfo.packageName,
                 classColor = getClassColor(nodeInfo.className),
-                isRoot = isRoot
+                isEntry = isEntry,
+                nodeType = "" // 初始为空，由 Action 在最后统一计算
             )
         }
 
-        // 如果一个已存在的节点被重新标记为根节点，更新它
-        if (isRoot && !nodeData.isRoot) {
-            nodeDataMap[uniqueId] = nodeData.copy(isRoot = true)
+        // 如果一个已存在的节点被重新标记为入口点，更新它
+        if (isEntry && !nodeData.isEntry) {
+            nodeDataMap[uniqueId] = nodeData.copy(isEntry = true)
         }
 
         return Pair(uniqueId, nodeDataMap[uniqueId]!!)
@@ -75,7 +76,6 @@ class NodeManager {
                         rawPackageName.trim()
                     )
                 } else {
-                    // 提供一个备用解析，以防万一
                     System.err.println("无法解析节点内容: $fullNodeContent")
                     return NodeInfo("UnknownClass", fullNodeContent, "", "unknown.package")
                 }
