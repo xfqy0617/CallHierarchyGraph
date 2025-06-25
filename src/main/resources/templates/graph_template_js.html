@@ -8,7 +8,7 @@
         body, html {
             margin: 0; padding: 0; height: 100%;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            background-color: #f8f9fa; /* Slightly lighter gray background */
+            background-color: #f8f9fa;
             overflow: hidden; display: flex; flex-direction: column;
         }
         #cy {
@@ -38,27 +38,21 @@
 
         /* --- [核心优化] Node Card Styling --- */
         .node-card {
-            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace; /* Use a monospace font for code */
-            background-color: #ffffff;
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            /* 背景色将由JS动态设置 */
             border: 1px solid #e0e0e0;
             border-radius: 6px;
             padding: 10px 12px;
             box-shadow: 0 2px 5px rgba(0,0,0,0.08);
-            width: 300px; /* Fixed width for uniform look */
+            width: 300px; /* 固定宽度以保持统一 */
             transition: all 0.2s ease-in-out;
             user-select: text;
-            pointer-events: none; /* Let clicks pass through to the underlying node */
+            pointer-events: none; /* 让点击事件穿透到下层节点 */
             text-align: left;
         }
-        .node-card:hover { /* Subtle hover effect */
+        .node-card:hover { /* 保留微妙的悬浮效果 */
             transform: translateY(-2px);
             box-shadow: 0 4px 10px rgba(0,0,0,0.12);
-        }
-        .node-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 6px;
         }
         .node-class-name {
             font-size: 14px;
@@ -66,18 +60,12 @@
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-        }
-        .node-type-badge {
-            font-size: 10px;
-            font-weight: 600;
-            padding: 2px 6px;
-            border-radius: 4px;
-            color: #fff;
+            margin-bottom: 6px;
         }
         .node-method-name {
             font-size: 13px;
             font-weight: 600;
-            color: #00529b; /* Darker blue for method name */
+            color: #00529b;
             margin-bottom: 4px;
         }
         .node-params, .node-package-name {
@@ -91,7 +79,7 @@
             padding-top: 4px;
         }
     </style>
-    <!-- 依赖库保持不变 -->
+    <!-- 依赖库 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
     <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
     <script src="https://unpkg.com/cytoscape-dagre@2.4.0/cytoscape-dagre.js"></script>
@@ -100,7 +88,6 @@
 <body>
 
 <div class="controls">
-    <!-- 控制面板 HTML 保持不变 -->
     <div class="control-group">
         <label for="layout-select">Layout:</label>
         <select id="layout-select">
@@ -141,22 +128,15 @@
             },
             style: [
                 {
-                    // [核心修改] 1. 让原生节点完全透明，只作为交互和布局的骨架
                     selector: 'node',
                     style: {
                         'background-opacity': 0,
                         'border-width': 0,
-                        // 让节点的大小适应其HTML标签，确保有足够的点击区域
-                        'width': 320,  // 比卡片稍宽
-                        'height': 110, // 比卡片稍高
+                        'width': 320,
+                        'height': 110,
                         'shape': 'rectangle'
                     }
                 },
-                // [核心修改] 2. 移除所有旧的节点背景色和边框样式，它们将被HTML卡片取代
-                // { selector: 'node[nodeType="..."]', ... }, <-- 已移除
-                // { selector: 'node[?isEntry]', ... },      <-- 已移除
-
-                // 边的样式保持不变，但可以微调颜色以匹配新主题
                 {
                     selector: 'edge',
                     style: {
@@ -167,9 +147,8 @@
                         'curve-style': 'bezier'
                     }
                 },
-                // [核心修改] 3. 高亮样式现在只作用于边和HTML标签，而非节点本身
                 {
-                    selector: 'edge.highlighted', // 只高亮边
+                    selector: 'edge.highlighted',
                     style: {
                         'line-color': '#007bff',
                         'target-arrow-color': '#007bff',
@@ -178,105 +157,82 @@
                     }
                 },
                 {
-                    selector: 'edge.dimmed', // 只虚化边
+                    selector: 'edge.dimmed',
                     style: { 'opacity': 0.2 }
                 }
             ],
             layout: { name: 'dagre', rankDir: 'LR', spacingFactor: 1.5 }
         });
 
-        // [核心修改] 4. 初始化HTML标签，使用全新的、信息更丰富的模板
+        // [核心修改] 初始化HTML标签，使用新的模板和样式逻辑
         cy.nodeHtmlLabel([
             {
                 query: 'node',
                 valign: "center",
                 halign: "center",
-                // tpl函数现在负责构建整个卡片的HTML和内联样式
                 tpl: function(data) {
-                    let cardStyle = '';
-                    let badgeBgColor = '';
-                    let nodeTypeText = data.nodeType;
+                    let borderStyle = '';
+                    let bgColor = '';
 
-                    // 根据节点类型设置侧边框颜色和徽章背景色
+                    // 根据节点类型设置左侧边框颜色和背景色
                     switch(data.nodeType) {
                         case 'ROOT':
-                            cardStyle = 'border-left: 5px solid #6c757d;'; // Gray
-                            badgeBgColor = '#6c757d';
+                            borderStyle = 'border-left: 5px solid #b0bec5;'; // Slate Gray
+                            bgColor = '#eceff1'; // Lighter Slate
                             break;
                         case 'LEAF':
-                            cardStyle = 'border-left: 5px solid #28a745;'; // Green
-                            badgeBgColor = '#28a745';
+                            borderStyle = 'border-left: 5px solid #66bb6a;'; // Soft Green
+                            bgColor = '#e8f5e9'; // Lighter Green
                             break;
                         case 'INTERMEDIATE':
                         default:
-                            cardStyle = 'border-left: 5px solid #17a2b8;'; // Teal
-                            badgeBgColor = '#17a2b8';
+                            borderStyle = 'border-left: 5px solid #42a5f5;'; // Soft Blue
+                            bgColor = '#e3f2fd'; // Lighter Blue
                             break;
                     }
 
-                    // 如果是入口点，使用更强的视觉提示覆盖之前的样式
-                    if (data.isEntry) {
-                        cardStyle = `
-                            border: 2px solid #fd7e14;
-                            box-shadow: 0 0 12px rgba(253, 126, 20, 0.6);
-                        `;
-                        nodeTypeText += ' (ENTRY)';
-                    }
+                    // 最终的样式组合
+                    const finalStyle = `${borderStyle} background-color: ${bgColor};`;
 
-                    // 返回最终的卡片HTML结构
+                    // 返回最终的卡片HTML结构（已移除徽章）
                     return `
-                        <div id="card-${data.id}" class="node-card" style="${cardStyle}">
-                            <div class="node-header">
-                                <div class="node-class-name" style="color: ${data.classColor};" title="${data.className}">${data.className}</div>
-                                <div class="node-type-badge" style="background-color: ${badgeBgColor};">${nodeTypeText}</div>
-                            </div>
-                            <div class="node-method-name" title="${data.methodName}">${data.methodName}</div>
-                            <div class="node-params" title="${data.params}">(${data.params})</div>
-                            <div class="node-package-name" title="${data.packageName}">${data.packageName}</div>
+                        <div id="card-${data.id}" class="node-card" style="${finalStyle}">
+                            <div class="node-class-name" style="font-size=20px; color: ${data.classColor};" title="${data.className}">${data.className}</div>
+                            <div class="node-method-name" style="font-size=16px;" title="${data.methodName}">${data.methodName}</div>
+                            <div class="node-params" style="font-size=5px;" title="${data.params}">(${data.params})</div>
+                            <div class="node-package-name" style="font-size=5px;" title="${data.packageName}">${data.packageName}</div>
                         </div>
                     `;
                 }
             }
         ]);
 
-        // --- 交互逻辑微调 ---
+        // --- 交互逻辑 (需要jQuery) ---
         function highlightPath(node) {
-            // 获取所有相关的节点和边
-            const upstreamNodes = node.predecessors('node');
-            const downstreamNodes = node.successors('node');
-            const upstreamEdges = node.predecessors('edge');
-            const downstreamEdges = node.successors('edge');
+            const path = node.union(node.successors()).union(node.predecessors());
+            const edges = path.edgesWith(path);
 
-            // 先把所有元素置为虚化状态
             cy.elements().addClass('dimmed');
-            $('.node-card').css('opacity', 0.3); // 虚化所有HTML卡片
+            $('.node-card').css('opacity', 0.3);
 
-            // 组合所有需要高亮的元素
-            const highlightCollection = node.union(upstreamNodes).union(downstreamNodes);
-            const highlightEdges = upstreamEdges.union(downstreamEdges);
+            path.removeClass('dimmed');
+            edges.removeClass('dimmed').addClass('highlighted');
 
-            // 移除虚化，添加高亮
-            highlightCollection.removeClass('dimmed');
-            highlightEdges.removeClass('dimmed').addClass('highlighted');
-
-            // 高亮对应的HTML卡片
-            highlightCollection.forEach(n => {
-                $(`#card-${n.id()}`).css('opacity', 1.0);
+            path.forEach(n => {
+                if (n.isNode()) {
+                    $(`#card-${n.id()}`).css('opacity', 1.0);
+                }
             });
         }
 
         function resetHighlight() {
             cy.elements().removeClass('highlighted').removeClass('dimmed');
-            $('.node-card').css('opacity', 1.0); // 恢复所有卡片的不透明度
+            $('.node-card').css('opacity', 1.0);
         }
 
-        cy.on('tap', 'node', function (evt) {
-            highlightPath(evt.target);
-        });
+        cy.on('tap', 'node', (evt) => highlightPath(evt.target));
+        cy.on('tap', (evt) => { if (evt.target === cy) resetHighlight(); });
 
-        cy.on('tap', (evt) => { if (evt.target === cy) { resetHighlight(); } });
-
-        // 其他控制逻辑保持不变
         document.getElementById('layout-select').addEventListener('change', function () { cy.layout({ name: this.value, rankDir: 'LR', animate: true, spacingFactor: 1.5 }).run(); });
         document.getElementById('reset-button').addEventListener('click', () => { resetHighlight(); document.getElementById('search-input').value = ''; cy.fit(null, 50); });
 
@@ -304,12 +260,8 @@
             }, 300);
         });
 
-        // 引入jQuery以便于操作DOM，如果不想引入，可以用原生JS替代
         const script = document.createElement('script');
         script.src = "https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js";
-        script.onload = () => {
-            // 交互逻辑需要jQuery，确保它加载后再执行
-        };
         document.head.appendChild(script);
     });
 </script>
