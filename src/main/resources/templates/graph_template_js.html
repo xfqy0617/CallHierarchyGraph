@@ -6,91 +6,62 @@
     <style>
         /* --- Basic Layout & Theming --- */
         body, html {
-            margin: 0;
-            padding: 0;
-            height: 100%;
+            margin: 0; padding: 0; height: 100%;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             background-color: #f7f7f7;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
+            overflow: hidden; display: flex; flex-direction: column;
         }
-
-        /* --- Graph Container --- */
         #cy {
-            flex-grow: 1; /* Takes up all available space */
-            position: relative;
-            background-color: #ffffff;
-            border-top: 1px solid #e0e0e0;
+            flex-grow: 1; position: relative;
+            background-color: #ffffff; border-top: 1px solid #e0e0e0;
         }
 
-        /* --- Control Panel --- */
+        /* --- Control Panel (unchanged) --- */
         .controls {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 10px 15px;
-            background-color: #ffffff;
-            border-bottom: 1px solid #e0e0e0;
-            flex-shrink: 0;
+            display: flex; align-items: center; gap: 12px;
+            padding: 10px 15px; background-color: #ffffff;
+            border-bottom: 1px solid #e0e0e0; flex-shrink: 0;
         }
-
-        /* --- UI Elements --- */
-        .control-group {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .control-group label {
-            font-size: 13px;
-            font-weight: 500;
-            color: #555;
-        }
-
+        .control-group { display: flex; align-items: center; gap: 8px; }
+        .control-group label { font-size: 13px; font-weight: 500; color: #555; }
         select, input[type="text"], button {
-            padding: 6px 10px;
-            border-radius: 5px;
-            border: 1px solid #ccc;
-            font-size: 13px;
-            background-color: #fff;
+            padding: 6px 10px; border-radius: 5px; border: 1px solid #ccc;
+            font-size: 13px; background-color: #fff;
             transition: border-color 0.2s, box-shadow 0.2s;
         }
+        select:focus, input[type="text"]:focus { outline: none; border-color: #007aff; box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2); }
+        button { cursor: pointer; background-color: #007aff; color: white; border-color: #007aff; font-weight: 500; }
+        button:hover { background-color: #005ecb; }
+        #reset-button { background-color: #6c757d; border-color: #6c757d; }
+        #reset-button:hover { background-color: #5a6268; }
 
-        select:focus, input[type="text"]:focus {
-            outline: none;
-            border-color: #007aff;
-            box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.2);
-        }
-
-        button {
-            cursor: pointer;
-            background-color: #007aff;
-            color: white;
-            border-color: #007aff;
-            font-weight: 500;
-        }
-
-        button:hover {
-            background-color: #005ecb;
-        }
-
-        #reset-button {
-            background-color: #6c757d;
-            border-color: #6c757d;
-        }
-
-        #reset-button:hover {
-            background-color: #5a6268;
+        /* --- [新增] HTML 标签的样式 --- */
+        .cy-node-html-label {
+            /* 让标签内容可被选中，方便复制 */
+            user-select: text;
+            text-align: left;
+            line-height: 1.2;
+            /* 关键：让鼠标点击事件穿透标签，作用于其下的节点 */
+            pointer-events: none;
+            /* 添加一个半透明背景和轻微的阴影，增强在复杂背景下的可读性 */
+            background: rgba(255, 255, 255, 0.8);
+            padding: 8px;
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
         }
     </style>
+    <!-- 引入 Cytoscape.js 核心库 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
+    <!-- 引入布局算法 -->
     <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
     <script src="https://unpkg.com/cytoscape-dagre@2.4.0/cytoscape-dagre.js"></script>
+    <!-- [核心新增] 引入 cytoscape-node-html-label 扩展 -->
+    <script src="https://unpkg.com/cytoscape-node-html-label@1.2.0/dist/cytoscape-node-html-label.min.js"></script>
 </head>
 <body>
 
 <div class="controls">
+    <!-- 控制面板 HTML 保持不变 -->
     <div class="control-group">
         <label for="layout-select">Layout:</label>
         <select id="layout-select">
@@ -110,6 +81,11 @@
 <div id="cy"></div>
 
 <script>
+    // 确保 cytoscape-node-html-label 扩展已注册
+    if(typeof cytoscapeNodeHtmlLabel === 'function'){
+        cytoscape.use(cytoscapeNodeHtmlLabel);
+    }
+
     document.addEventListener('DOMContentLoaded', function () {
         const graphData = '{graph_data_placeholder}';
 
@@ -122,122 +98,80 @@
         const cy = cytoscape({
             container: document.getElementById('cy'),
             elements: {
-                nodes: graphData.nodes.map(node => ({
-                    data: {
-                        id: node.id,
-                        fullLabel: `${node.className}\n${node.methodName}(${node.params})\n${node.packageName}`,
-                        ...node
-                    }
-                })),
-                edges: graphData.edges.map(edge => ({
-                    data: {
-                        id: `edge_${edge.source}_${edge.target}`,
-                        source: edge.source,
-                        target: edge.target
-                    }
-                }))
+                // 节点和边的定义保持不变
+                nodes: graphData.nodes.map(node => ({ data: { id: node.id, ...node } })),
+                edges: graphData.edges.map(edge => ({ data: { id: `edge_${edge.source}_${edge.target}`, source: edge.source, target: edge.target } }))
             },
             style: [
                 {
                     selector: 'node',
                     style: {
+                        // [修改] 节点本身现在只是一个背景板，不再需要处理标签
                         'shape': 'round-rectangle',
-                        'width': 'label',
-                        'height': 'label',
-                        'padding': '12px',
-                        'label': (ele) => `${ele.data('className')}\n${ele.data('methodName')}`,
-                        'text-wrap': 'wrap',
-                        'text-max-width': '200px',
-                        'text-valign': 'center',
-                        'text-halign': 'center',
-                        'font-weight': 'bold',
-                        'font-size': '14px',
-                        'color': '#0062c4', // Method name color
-                        'border-color': 'data(classColor)', // Class color on border
-                        'border-width': 4
+                        'width': 200,  // 提供一个足够大的背景宽度
+                        'height': 80, // 提供一个足够大的背景高度
+                        // 节点背景色逻辑保持不变
                     }
                 },
-                { // 普通节点 - 粉蓝色
-                    selector: 'node[nodeType="INTERMEDIATE"]',
-                    style: {'background-color': '#B6E8F3'}
-                },
-                { // 调用链顶端 (无出度) - 灰色
-                    selector: 'node[nodeType="ROOT"]',
-                    style: {'background-color': '#E0E0E0'}
-                },
-                { // 调用链末端 (无入度) - 淡绿色
-                    selector: 'node[nodeType="LEAF"]',
-                    style: {'background-color': '#D2EEC1'}
-                },
-                { // 分析入口点的特殊样式
-                    selector: 'node[?isEntry]',
-                    style: {
-                        'border-style': 'double',
-                        'border-width': 6,
-                        'border-color': '#FFD700'
-                    }
-                },
-                {
-                    selector: 'edge',
-                    style: {
-                        'width': 2,
-                        'line-color': '#b3b3b3',
-                        'target-arrow-color': '#b3b3b3',
-                        'target-arrow-shape': 'triangle',
-                        'curve-style': 'bezier'
-                    }
-                },
-                {
-                    selector: '.highlighted',
-                    style: {
-                        'background-color': '#007aff',
-                        'line-color': '#007aff',
-                        'target-arrow-color': '#007aff',
-                        'border-color': '#007aff',
-                        'transition-property': 'background-color, line-color, target-arrow-color, border-color',
-                        'transition-duration': '0.2s'
-                    }
-                },
-                {
-                    selector: '.dimmed',
-                    style: {'opacity': 0.2}
-                }
+                // 节点背景色逻辑 (保持不变)
+                { selector: 'node[nodeType="INTERMEDIATE"]', style: { 'background-color': '#B6E8F3' } },
+                { selector: 'node[nodeType="ROOT"]', style: { 'background-color': '#E0E0E0' } },
+                { selector: 'node[nodeType="LEAF"]', style: { 'background-color': '#D2EEC1' } },
+                // 分析入口点样式 (保持不变)
+                { selector: 'node[?isEntry]', style: { 'border-style': 'double', 'border-width': 6, 'border-color': '#FFD700' } },
+
+                // 边和高亮样式 (保持不变)
+                { selector: 'edge', style: { 'width': 2, 'line-color': '#b3b3b3', 'target-arrow-color': '#b3b3b3', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier' } },
+                { selector: '.highlighted', style: { 'background-color': '#007aff', 'line-color': '#007aff', 'target-arrow-color': '#007aff', 'border-color': '#007aff', 'transition-property': 'background-color, line-color, target-arrow-color, border-color', 'transition-duration': '0.2s' } },
+                { selector: '.dimmed', style: { 'opacity': 0.2 } }
             ],
-            layout: {
-                name: 'dagre',
-                rankDir: 'LR',
-                spacingFactor: 1.2
-            }
+            layout: { name: 'dagre', rankDir: 'LR', spacingFactor: 1.5 }
         });
 
-        // Interaction logic
+        // --- [核心新增] 初始化 HTML 标签 ---
+        cy.nodeHtmlLabel([
+            {
+                query: 'node', // 对所有节点应用此规则
+                valign: "center", // 垂直居中
+                halign: "center", // 水平居中
+                // tpl (template) 函数是关键，它返回每个节点要显示的HTML字符串
+                tpl: function(data) {
+                    // 使用模板字符串动态构建符合您要求的HTML
+                    return `
+                        <div class="cy-node-html-label">
+                            <div style="font-size: 14px; font-weight: bold; color: ${data.classColor};">${data.className}</div>
+                            <div style="font-size: 12px; font-weight: bold; color: #0062c4;">${data.methodName}</div>
+                            <div style="font-size: 8px; color: #666666;">(${data.params})</div>
+                            <div style="font-size: 8px; color: #a8a8a8;">${data.packageName}</div>
+                        </div>
+                    `;
+                }
+            }
+        ]);
+
+        // --- 交互逻辑 (需要微调搜索) ---
         cy.on('tap', 'node', function (evt) {
             const node = evt.target;
             const highlightCollection = node.union(node.successors()).union(node.predecessors());
             cy.elements().removeClass('highlighted').addClass('dimmed');
             highlightCollection.removeClass('dimmed').addClass('highlighted');
         });
-
-        cy.on('tap', function (evt) {
-            if (evt.target === cy) {
-                cy.elements().removeClass('highlighted').removeClass('dimmed');
-            }
-        });
-
-        document.getElementById('layout-select').addEventListener('change', function () {
-            cy.layout({name: this.value, rankDir: 'LR', animate: true, spacingFactor: 1.2}).run();
-        });
+        cy.on('tap', (evt) => { if (evt.target === cy) { cy.elements().removeClass('highlighted').removeClass('dimmed'); } });
+        document.getElementById('layout-select').addEventListener('change', function () { cy.layout({ name: this.value, rankDir: 'LR', animate: true, spacingFactor: 1.5 }).run(); });
 
         let timeout;
-        document.getElementById('search-input').addEventListener('input', function () {
+        document.getElementById('search-input').addEventListener('input', function() {
             const query = this.value.toLowerCase().trim();
             clearTimeout(timeout);
             timeout = setTimeout(() => {
                 cy.elements().removeClass('highlighted').removeClass('dimmed');
                 if (!query) return;
 
+                // [修改] 搜索现在需要检查每个数据字段
                 const searchResults = cy.nodes().filter(node =>
-                    node.data('fullLabel').toLowerCase().includes(query)
+                    node.data('className').toLowerCase().includes(query) ||
+                    node.data('methodName').toLowerCase().includes(query) ||
+                    node.data('packageName').toLowerCase().includes(query)
                 );
 
                 if (searchResults.length > 0) {
@@ -246,12 +180,10 @@
                 }
             }, 300);
         });
-
-        document.getElementById('reset-button').addEventListener('click', function () {
+        document.getElementById('reset-button').addEventListener('click', () => {
             cy.elements().removeClass('highlighted').removeClass('dimmed');
             document.getElementById('search-input').value = '';
-            cy.fit();
-            cy.center();
+            cy.fit(); cy.center();
         });
     });
 </script>
