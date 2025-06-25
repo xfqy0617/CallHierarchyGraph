@@ -47,14 +47,14 @@ tasks {
 }
 
 dependencies {
-    // 告诉 Gradle，当我们引入 graphviz-java 时，不要引入它附带的 slf4j-api 包
-//    implementation("guru.nidi:graphviz-java:0.18.1")
-    implementation("guru.nidi:graphviz-java:0.18.1") {
-        exclude(group = "org.slf4j", module = "slf4j-api")
-        // 如果 graphviz-java 还依赖了具体的 slf4j 实现（比如 slf4j-simple），也一并排除
-        // 通常排除 api 就足够了，但为了保险可以都加上
-        // exclude(group = "org.slf4j", module = "slf4j-simple")
-    }
+//    // 告诉 Gradle，当我们引入 graphviz-java 时，不要引入它附带的 slf4j-api 包
+////    implementation("guru.nidi:graphviz-java:0.18.1")
+//    implementation("guru.nidi:graphviz-java:0.18.1") {
+//        exclude(group = "org.slf4j", module = "slf4j-api")
+//        // 如果 graphviz-java 还依赖了具体的 slf4j 实现（比如 slf4j-simple），也一并排除
+//        // 通常排除 api 就足够了，但为了保险可以都加上
+//        // exclude(group = "org.slf4j", module = "slf4j-simple")
+//    }
 
     // JSON 序列化库
     implementation("com.google.code.gson:gson:2.10.1")

@@ -189,7 +189,10 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
         toolWindow.show(null)
         return consoleView
     }
-    // CallHierarchyGraphAction.kt (部分修改)
+
+    /**
+     * [重构] 启动后台任务，分析调用链并生成结构化数据。
+     */
     private fun runAnalysisInBackground(
         project: Project,
         methods: List<PsiMethod>,
@@ -201,25 +204,30 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, "分析方法调用链", true) {
                 override fun run(indicator: ProgressIndicator) {
-                    // 新的数据收集器
                     val nodeManager = NodeManager()
-                    val allNodes = mutableMapOf<String, NodeData>() // ID -> NodeData
+                    val allNodes = mutableMapOf<String, NodeData>() // 使用 Map 防止重复节点
                     val allEdges = mutableListOf<EdgeData>()
-                    val processedEdges = mutableSetOf<String>() // 防止重复边
+                    val processedEdges = mutableSetOf<String>() // 使用 Set 防止重复边
 
-                    methods.forEach { targetMethod ->
+                    // 将初始选择的方法作为根节点处理
+                    val rootMethodsContent = methods.map { formatMethod(it) }
+
+                    methods.forEachIndexed { index, targetMethod ->
                         indicator.text = "正在分析: ${targetMethod.name}"
 
-                        val initialMethodContent = formatMethod(targetMethod)
-                        val (methodId, methodNodeData) = nodeManager.getOrGenerateNode(initialMethodContent)
-                        allNodes[methodId] = methodNodeData
-
-                        // 递归查找并填充 allNodes 和 allEdges
+                        // 递归地查找调用者并填充节点和边列表
                         findCallersRecursive(
-                            targetMethod, project, setOf(targetMethod), indicator, scope,
-                            nodeManager, allNodes, allEdges, processedEdges
+                            method = targetMethod,
+                            project = project,
+                            path = setOf(targetMethod), // 初始路径包含自身以防立即循环
+                            indicator = indicator,
+                            scope = scope,
+                            nodeManager = nodeManager,
+                            allNodes = allNodes,
+                            allEdges = allEdges,
+                            processedEdges = processedEdges,
+                            rootMethodsContent = rootMethodsContent // 传递根节点列表
                         )
-
                         indicator.checkCanceled()
                     }
 
@@ -227,10 +235,13 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
                     val graphData = GraphData(nodes = allNodes.values.toList(), edges = allEdges)
 
                     try {
-                        // 使用新的 Visualizer
+                        // 使用新的、简化的 Visualizer
                         val visualizer = CallHierarchyVisualizer()
                         visualizer.renderGraph(graphData, outputFilename, true, outputPath)
-                        consoleView.print("图表已成功导出！\n路径为:${outputPath}${File.separator}${outputFilename}.html", ConsoleViewContentType.SYSTEM_OUTPUT)
+                        consoleView.print(
+                            "图表已成功导出！\n路径为: ${outputPath}${File.separator}${outputFilename}.html",
+                            ConsoleViewContentType.SYSTEM_OUTPUT
+                        )
                     } catch (e: Exception) {
                         val sw = StringWriter()
                         e.printStackTrace(PrintWriter(sw))
@@ -241,7 +252,9 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
         )
     }
 
-    // 需要一个新的递归函数
+    /**
+     * [新增] 新的递归函数，用于构建节点和边的数据。
+     */
     private fun findCallersRecursive(
         method: PsiMethod,
         project: Project,
@@ -251,15 +264,18 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
         nodeManager: NodeManager,
         allNodes: MutableMap<String, NodeData>,
         allEdges: MutableList<EdgeData>,
-        processedEdges: MutableSet<String>
+        processedEdges: MutableSet<String>,
+        rootMethodsContent: List<String>
     ) {
         indicator.checkCanceled()
 
+        // 获取当前被调用方法（父节点）的数据
         val parentMethodContent = formatMethod(method)
-        val (parentId, parentNodeData) = nodeManager.getOrGenerateNode(parentMethodContent)
+        val isRoot = parentMethodContent in rootMethodsContent
+        val (parentId, parentNodeData) = nodeManager.getOrGenerateNode(parentMethodContent, isRoot)
         allNodes[parentId] = parentNodeData
 
-        // 查找调用者的逻辑保持不变
+        // 查找所有调用者（子节点）
         val callingMethods = ApplicationManager.getApplication().runReadAction<List<PsiMethod>> {
             val searchScope = GlobalSearchScope.projectScope(project)
             val references = ReferencesSearch.search(method, searchScope).findAll()
@@ -269,10 +285,9 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
                 .distinct()
 
             if (scope == AnalysisScope.ALL) {
-                allCallers // 在 lambda 中，可以直接返回值，无需 `return@...`
+                allCallers
             } else {
                 val projectFileIndex = ProjectFileIndex.getInstance(project)
-                // [修正] 将 filter 的结果作为 else 分支的返回值
                 allCallers.filter { caller ->
                     val virtualFile = caller.containingFile?.virtualFile ?: return@filter false
                     val isInTestSources = projectFileIndex.isInTestSourceContent(virtualFile)
@@ -280,29 +295,38 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
                     when (scope) {
                         AnalysisScope.PRODUCTION -> !isInTestSources
                         AnalysisScope.TEST -> isInTestSources
-                        AnalysisScope.ALL -> true
+                        AnalysisScope.ALL -> true // 虽然前面处理过，但为完整性保留
                     }
                 }
             }
         }
 
+        // 遍历所有调用者
         for (caller in callingMethods) {
-            if (caller in path) { // 循环依赖
+            // 处理循环依赖：如果调用者已在当前分析路径上，则跳过
+            val isInPath = ApplicationManager.getApplication().runReadAction<Boolean> { caller in path }
+            if (isInPath) {
                 continue
             }
 
+            // 获取调用者（子节点）的数据
             val childMethodContent = formatMethod(caller)
-            val (childId, childNodeData) = nodeManager.getOrGenerateNode(childMethodContent)
+            val (childId, childNodeData) = nodeManager.getOrGenerateNode(childMethodContent, false) // 调用者不可能是根节点
             allNodes[childId] = childNodeData
 
-            // 添加边 (从调用者指向被调用者，即 child -> parent)
-            val edgeId = "$childId -> $parentId"
+            // 添加边：从调用者指向被调用者 (caller -> method)
+            // 在我们的图中，这意味着 source: childId, target: parentId
+            val edgeId = "$childId->$parentId"
             if (processedEdges.add(edgeId)) {
                 allEdges.add(EdgeData(source = childId, target = parentId))
             }
 
-            val newPath = ApplicationManager.getApplication().runReadAction<Set<PsiMethod>> { path + method }
-            findCallersRecursive(caller, project, newPath, indicator, scope, nodeManager, allNodes, allEdges, processedEdges)
+            // 递归进入下一层
+            val newPath = ApplicationManager.getApplication().runReadAction<Set<PsiMethod>> { path + caller }
+            findCallersRecursive(
+                caller, project, newPath, indicator, scope,
+                nodeManager, allNodes, allEdges, processedEdges, rootMethodsContent
+            )
         }
     }
 

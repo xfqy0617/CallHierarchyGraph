@@ -1,5 +1,7 @@
 package org.xfqy.callhierarchygraph.model
 
+import org.jsoup.select.Evaluator.IsRoot
+
 // 顶层数据结构
 data class GraphData(
     val nodes: List<NodeData>,
@@ -13,7 +15,8 @@ data class NodeData(
     val methodName: String,
     val params: String,
     val packageName: String,
-    val classColor: String   // 由后端生成的类颜色
+    val classColor: String,   // 由后端生成的类颜色
+    val isRoot: Boolean
 )
 
 // 边信息

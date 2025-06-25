@@ -4,134 +4,70 @@ import org.xfqy.callhierarchygraph.model.NodeData
 import org.xfqy.callhierarchygraph.util.DistinctDarkColorGenerator
 import org.xfqy.callhierarchygraph.util.Pair
 
-// 预编译正则表达式，用于提取节点标签信息
 private val LABEL_PATTERN_KOTLIN: Regex = "^(.+?)\\.([a-zA-Z0-9_<>\$]+)\\((.*?)\\)(?:\\s*\\(\\s*(\\d+)\\s+usages\\s*\\))?\\s+\\(([a-zA-Z0-9_.]+)\\)\$".toRegex()
+
 class NodeManager {
     // 完整节点内容 -> 唯一节点ID
-    private val nodeMap: MutableMap<String, NodeInfo> = HashMap()
-    private val nodeIdMap: MutableMap<NodeInfo, String> = HashMap()
+    private val nodeContentToIdMap: MutableMap<String, String> = HashMap()
+    // 唯一节点ID -> 节点数据
+    private val nodeDataMap: MutableMap<String, NodeData> = HashMap()
     private var nodeCounter: Int = 1
 
-    // 子节点ID -> 父节点ID集合
-    var parentMap: MutableMap<String, MutableSet<String>> = HashMap()
-        private set
-
-    // 父节点ID -> 子节点ID集合
-    var childrenMap: MutableMap<String, MutableSet<String>> = HashMap()
-        private set
-
     private val colorSet: MutableSet<String> = mutableSetOf()
-
     private val classColorMap: MutableMap<String, String> = mutableMapOf()
 
     /**
-     * 生成唯一的节点ID和显示标签
-     * @param fullNodeContent 完整的节点内容字符串
-     * @return 包含节点ID和标签的Pair
+     * 根据方法的全限定内容，生成或获取其唯一的ID和对应的NodeData对象。
+     * @param fullNodeContent 格式化后的方法字符串。
+     * @param isRoot 标记这个节点是否是分析的起点。
+     * @return 返回包含唯一ID和NodeData的Pair。
      */
-    fun getNodeIdAndLabel(fullNodeContent: String): Pair<String, String> {
-        var nodeInfo = nodeMap[fullNodeContent]
-        if (nodeInfo  == null) {
-            nodeInfo = NodeInfo.from(fullNodeContent)
-            nodeMap[fullNodeContent] = nodeInfo
+    fun getOrGenerateNode(fullNodeContent: String, isRoot: Boolean = false): Pair<String, NodeData> {
+        val uniqueId = nodeContentToIdMap.computeIfAbsent(fullNodeContent) {
+            "node${nodeCounter++}"
         }
-        var uniqueId = nodeIdMap[nodeInfo]
-        if (uniqueId == null) {
-            uniqueId = "node" + nodeCounter++
-            nodeIdMap[nodeInfo] = uniqueId
-        }
-        val label = createLabel(nodeInfo)
-        return Pair(uniqueId, label)
-    }
 
-    /**
-     * 创建节点的显示标签
-     * @param fullNodeContent 完整的节点内容
-     * @return HTML格式的标签字符串
-     */
-    private fun createLabel(nodeInfo: NodeInfo): String {
-        // 这里通过不同的Size大小来区分数据, 便于JS中处理, 因为Graphviz生成图后没有办法对节点内部的不同部分进行有效区分
-        return """
-            <FONT POINT-SIZE="14" color="${getClassColor(nodeInfo.className)}"><B>${nodeInfo.className}</B></FONT>
-            <BR/>
-            <FONT POINT-SIZE="12" color="#0062c4"><B>${nodeInfo.funName}</B></FONT>
-            <BR/>
-            <FONT POINT-SIZE="7" color="#a8a8a8">${nodeInfo.param}</FONT>
-            <BR/>
-            <FONT POINT-SIZE="8" color="#a8a8a8">${nodeInfo.packageName}</FONT>
-            """
+        val nodeData = nodeDataMap.computeIfAbsent(uniqueId) {
+            val nodeInfo = NodeInfo.from(fullNodeContent)
+            NodeData(
+                id = uniqueId,
+                className = nodeInfo.className,
+                methodName = nodeInfo.funName,
+                params = nodeInfo.param,
+                packageName = nodeInfo.packageName,
+                classColor = getClassColor(nodeInfo.className),
+                isRoot = isRoot
+            )
+        }
+
+        // 如果一个已存在的节点被重新标记为根节点，更新它
+        if (isRoot && !nodeData.isRoot) {
+            nodeDataMap[uniqueId] = nodeData.copy(isRoot = true)
+        }
+
+        return Pair(uniqueId, nodeDataMap[uniqueId]!!)
     }
 
     private fun getClassColor(className: String): String {
-        var classColor = classColorMap[className]
-        if (classColor != null) {
-            return classColor
+        return classColorMap.getOrPut(className) {
+            DistinctDarkColorGenerator.generate(colorSet).also {
+                colorSet.add(it)
+            }
         }
-        classColor = DistinctDarkColorGenerator.generate(colorSet)
-        colorSet.add(classColor)
-        classColorMap[className] = classColor
-        return classColor
     }
 
-    /**
-     * 添加父子节点关系
-     * @param parentId 父节点ID
-     * @param childId 子节点ID
-     */
-    fun addParentChildRelationship(parentId: String, childId: String) {
-        val parentSet = parentMap.getOrDefault(childId, mutableSetOf())
-        parentSet.add(parentId)
-        parentMap[childId] = parentSet
-
-        val childrenSet = childrenMap.getOrDefault(parentId, mutableSetOf())
-        childrenSet.add(childId)
-        childrenMap[parentId] = childrenSet
-    }
-
-    /**
-     * 判断是否为根节点
-     * @param nodeId 节点ID
-     * @return 如果是根节点则返回true
-     */
-    fun isRootNode(nodeId: String): Boolean {
-        return !parentMap.containsKey(nodeId) || parentMap[nodeId].isNullOrEmpty()
-    }
-
-    /**
-     * 判断是否为叶节点
-     * @param nodeId 节点ID
-     * @return 如果是叶节点则返回true
-     */
-    fun isLeafNode(nodeId: String): Boolean {
-        return !childrenMap.containsKey(nodeId) || childrenMap[nodeId].isNullOrEmpty()
-    }
-
-    /**
-     * 获取所有节点ID到其完整内容的映射
-     * @return Map<String, NodeInfo> 节点ID -> 节点内容
-     */
-    fun getNodeInfoMap(): MutableMap<String, NodeInfo> {
-        val contentMap: MutableMap<String, NodeInfo> = HashMap()
-        for (entry in nodeIdMap.entries) {
-            contentMap[entry.value] = entry.key
-        }
-        return contentMap
-    }
-
-    data class NodeInfo(
+    // 内部数据类，用于从字符串解析
+    private data class NodeInfo(
         val className: String,
         val funName: String,
         val param: String,
         val packageName: String,
     ) {
-
         companion object {
             fun from(fullNodeContent: String): NodeInfo {
-                val matchResult = LABEL_PATTERN_KOTLIN.find(fullNodeContent) // 使用 Kotlin Regex 的 find 方法
+                val matchResult = LABEL_PATTERN_KOTLIN.find(fullNodeContent)
                 if (matchResult != null) {
                     val (rawClassName, rawFunName, rawParam, _, rawPackageName) = matchResult.destructured
-
-                    // 这里创建 NodeInfo 实例，只存储原始数据
                     return NodeInfo(
                         rawClassName.trim(),
                         rawFunName.trim(),
@@ -139,42 +75,16 @@ class NodeManager {
                         rawPackageName.trim()
                     )
                 } else {
-                    throw RuntimeException("异常的节点内容")
+                    // 提供一个备用解析，以防万一
+                    System.err.println("无法解析节点内容: $fullNodeContent")
+                    return NodeInfo("UnknownClass", fullNodeContent, "", "unknown.package")
                 }
             }
 
-            private fun htmlEscaped(text:String): String {
-                val result = text.replace("<", "&lt;").replace(">", "&gt;")
+            private fun htmlEscaped(text: String): String {
+                val result = text.replace("<", "<").replace(">", ">")
                 return result.ifEmpty { " " }
             }
         }
     }
-
-    // 返回 NodeData 和它的唯一ID
-    fun getOrGenerateNode(fullNodeContent: String): Pair<String, NodeData> {
-        // 1. 生成或获取唯一 ID 的逻辑保持不变
-        var nodeInfo = nodeMap[fullNodeContent]
-        if (nodeInfo == null) {
-            nodeInfo = NodeInfo.from(fullNodeContent)
-            nodeMap[fullNodeContent] = nodeInfo
-        }
-        var uniqueId = nodeIdMap[nodeInfo]
-        if (uniqueId == null) {
-            uniqueId = "node" + nodeCounter++
-            nodeIdMap[nodeInfo] = uniqueId
-        }
-
-        // 2. 创建 NodeData 对象
-        val nodeData = NodeData(
-            id = uniqueId,
-            className = nodeInfo.className,
-            methodName = nodeInfo.funName,
-            params = nodeInfo.param,
-            packageName = nodeInfo.packageName,
-            classColor = getClassColor(nodeInfo.className) // 颜色生成逻辑复用
-        )
-
-        return Pair(uniqueId, nodeData)
-    }
-
 }
