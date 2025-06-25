@@ -14,24 +14,24 @@ repositories {
 // Configure Gradle IntelliJ Plugin
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-gradle-intellij-plugin.html
 intellij {
-    version.set("2023.2.6")
+    version.set("2022.1.1")
     type.set("IC") // Target IDE Platform
     plugins.set(listOf("java", "com.intellij.java"))
     updateSinceUntilBuild.set(true)
 }
 
 tasks {
-    // Set the JVM compatibility versions
+    // [核心修改] Set the JVM compatibility versions to Java 11
     withType<JavaCompile> {
-        sourceCompatibility = "17"
-        targetCompatibility = "17"
+        sourceCompatibility = "11"
+        targetCompatibility = "11"
     }
     withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
-        kotlinOptions.jvmTarget = "17"
+        kotlinOptions.jvmTarget = "11"
     }
 
     patchPluginXml {
-        sinceBuild.set("232")
+        sinceBuild.set("221")
         untilBuild.set("242.*")
     }
 

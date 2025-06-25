@@ -253,34 +253,14 @@ class CallHierarchyVisualizer {
      *
      * @param outputFilename 输出文件名 (不含扩展名)
      * @param view           是否自动打开生成的文件
-     * @param format         输出格式 (png, html)
      */
-    fun renderGraph(outputFilename: String, view: Boolean, format: String, basePath: String) {
+    fun renderGraph(outputFilename: String, view: Boolean, basePath: String) {
         try {
             // [修改] 直接使用传入的 basePath
             val outputDir = Paths.get(basePath)
             Files.createDirectories(outputDir)
-
             val outputPath = outputDir.resolve(outputFilename)
-
-            if ("html".equals(format, ignoreCase = true)) {
-                renderHtml(outputPath, view)
-            } else {
-                val graphvizFormat = Format.valueOf(format.uppercase())
-                // --- 关键修改点 ---
-                // 在 graphviz-java 0.18.1 版本中，toFile() 方法返回的是 File 对象。
-                // 捕获为 File，然后转换为 Path。
-                var renderer = Graphviz.fromGraph(graph).render(graphvizFormat)
-                val renderedFile = renderer.toFile(outputPath.toFile())
-                val renderedPath = renderedFile.toPath() // 将 File 转换为 Path
-
-                println("图已渲染到 ${renderedPath.toAbsolutePath()}")
-                println(renderer.toString())
-
-                if (view && Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
-                    Desktop.getDesktop().open(renderedFile) // Desktop.open 方法接受 File 对象
-                }
-            }
+            renderHtml(outputPath, view)
         } catch (e: Exception) {
             System.err.println(
                 """
@@ -301,9 +281,9 @@ class CallHierarchyVisualizer {
      * @throws IOException 如果文件操作失败
      */
     private fun renderHtml(outputPath: Path, view: Boolean) {
-
         // 1. Render SVG content
         val svgContent = Graphviz.fromGraph(graph).render(Format.SVG).toString()
+        println(svgContent)
 
         // 2. Load HTML template
         val templateContent: String =

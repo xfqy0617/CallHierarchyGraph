@@ -3,7 +3,6 @@ package org.xfqy.callhierarchygraph.plugin
 import com.intellij.execution.filters.TextConsoleBuilderFactory
 import com.intellij.execution.ui.ConsoleView
 import com.intellij.execution.ui.ConsoleViewContentType
-import com.intellij.openapi.actionSystem.ActionUpdateThread
 import com.intellij.openapi.actionSystem.AnAction
 import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
@@ -30,9 +29,9 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
 
     private val consoleViewMap = mutableMapOf<Project, ConsoleView>()
 
-    override fun getActionUpdateThread(): ActionUpdateThread {
-        return ActionUpdateThread.BGT
-    }
+//    override fun getActionUpdateThread(): ActionUpdateThread {
+//        return ActionUpdateThread.BGT
+//    }
 
     /**
      * 更新 Action 的状态。
@@ -170,7 +169,7 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
                         val visualizer = CallHierarchyVisualizer(4)
                         visualizer.parseAndBuildGraph(finalResultBuilder.toString())
                         // [修改] 使用从对话框传入的参数
-                        visualizer.renderGraph(outputFilename, true, "html", outputPath)
+                        visualizer.renderGraph(outputFilename, true, outputPath)
                         consoleView.print("图表已成功导出！\n 路径为:${outputPath}${File.separator}${outputFilename}", ConsoleViewContentType.SYSTEM_OUTPUT)
                     } catch (e: Exception) {
                         // 打印更详细的错误到控制台
@@ -200,7 +199,6 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
         indicator.checkCanceled()
         val resultLines = mutableListOf<String>()
 
-        // [重要] 核心过滤逻辑
         val callingMethods = ApplicationManager.getApplication().runReadAction<List<PsiMethod>> {
             val searchScope = GlobalSearchScope.projectScope(project)
             val references = ReferencesSearch.search(method, searchScope).findAll()
@@ -209,25 +207,23 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
                 .mapNotNull { PsiTreeUtil.getParentOfType(it.element, PsiMethod::class.java) }
                 .distinct()
 
-            // 如果作用域是 "ALL"，则不过滤
             if (scope == AnalysisScope.ALL) {
-                return@runReadAction allCallers
-            }
+                allCallers // 在 lambda 中，可以直接返回值，无需 `return@...`
+            } else {
+                val projectFileIndex = ProjectFileIndex.getInstance(project)
+                // [修正] 将 filter 的结果作为 else 分支的返回值
+                allCallers.filter { caller ->
+                    val virtualFile = caller.containingFile?.virtualFile ?: return@filter false
+                    val isInTestSources = projectFileIndex.isInTestSourceContent(virtualFile)
 
-            // 否则，根据作用域进行过滤
-            val projectFileIndex = ProjectFileIndex.getInstance(project)
-            allCallers.filter { caller ->
-                val virtualFile = caller.containingFile?.virtualFile ?: return@filter false
-                val isInTestSources = projectFileIndex.isInTestSourceContent(virtualFile)
-
-                when (scope) {
-                    AnalysisScope.PRODUCTION -> !isInTestSources // 仅生产代码：保留不在测试源中的
-                    AnalysisScope.TEST -> isInTestSources      // 仅测试代码：保留在测试源中的
-                    AnalysisScope.ALL -> true                  // 全部：保留所有 (理论上不会到这里，但为了完整性)
+                    when (scope) {
+                        AnalysisScope.PRODUCTION -> !isInTestSources
+                        AnalysisScope.TEST -> isInTestSources
+                        AnalysisScope.ALL -> true
+                    }
                 }
             }
         }
-
         // 后续的循环和递归逻辑完全不变
         for (caller in callingMethods) {
             val isInPath = ApplicationManager.getApplication().runReadAction<Boolean> { caller in path }
@@ -292,7 +288,8 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
     }
 
     /**
-     * 获取或创建一个新的控制台 Tool Window (保持不变)
+     * 获取或创建一个新的控制台 Tool Window
+     * (针对 ContentFactory 进行兼容性修改)
      */
     private fun getOrCreateConsole(project: Project): ConsoleView {
         val toolWindowManager = ToolWindowManager.getInstance(project)
@@ -310,7 +307,12 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
             }
             val consoleBuilder = TextConsoleBuilderFactory.getInstance().createBuilder(project)
             consoleView = consoleBuilder.console
-            val content = ContentFactory.getInstance().createContent(consoleView.component, "调用链分析", false)
+
+            // [兼容性修改] 使用 ContentFactory.SERVICE.getInstance()
+            // 这是从 2020.3 版本开始推荐的方式，在 2022.1.1 中完全可用
+            val contentFactory = ContentFactory.SERVICE.getInstance()
+            val content = contentFactory.createContent(consoleView.component, "调用链分析", false)
+
             toolWindow.contentManager.removeAllContents(true)
             toolWindow.contentManager.addContent(content)
             consoleViewMap[project] = consoleView
