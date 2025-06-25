@@ -6,7 +6,6 @@ import java.awt.Desktop
 import java.io.IOException
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
-import java.nio.file.Path
 import java.nio.file.Paths
 
 // 我们将使用一个新的模板文件，稍后创建它
