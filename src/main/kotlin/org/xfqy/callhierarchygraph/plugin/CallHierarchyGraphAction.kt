@@ -18,20 +18,19 @@ import com.intellij.psi.search.GlobalSearchScope
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.PsiTreeUtil
 import com.intellij.ui.content.ContentFactory
+import org.xfqy.callhierarchygraph.entity.EdgeData
+import org.xfqy.callhierarchygraph.entity.GraphData
+import org.xfqy.callhierarchygraph.entity.NodeData
+import org.xfqy.callhierarchygraph.manager.NodeManager
 import org.xfqy.callhierarchygraph.visualizer.CallHierarchyVisualizer
 import java.io.File
 import java.io.PrintWriter
 import java.io.StringWriter
 
-// ... other code in your class ...
 
 class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更新了文本
 
     private val consoleViewMap = mutableMapOf<Project, ConsoleView>()
-
-//    override fun getActionUpdateThread(): ActionUpdateThread {
-//        return ActionUpdateThread.BGT
-//    }
 
     /**
      * 更新 Action 的状态。
@@ -119,137 +118,6 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
         }
     }
 
-
-    /**
-     * [重构] 将分析逻辑封装到一个单独的方法中，以便在后台任务中调用
-     */
-    private fun runAnalysisInBackground(
-        project: Project,
-        methods: List<PsiMethod>,
-        consoleView: ConsoleView,
-        outputPath: String,
-        outputFilename: String,
-        scope: AnalysisScope,
-    ) {
-        ProgressManager.getInstance().run(
-            object : Task.Backgroundable(project, "分析方法调用链", true) {
-                override fun run(indicator: ProgressIndicator) {
-                    // 1. 使用 StringBuilder 来高效地拼接所有结果
-                    val finalResultBuilder = StringBuilder()
-
-                    methods.forEachIndexed { index, targetMethod ->
-                        // 在多个方法的分析结果之间添加分隔符
-                        if (index > 0) {
-                            finalResultBuilder.append("\n")
-                        }
-
-                        indicator.text = "正在分析: ${targetMethod.name}"
-
-                        // 2. 将目标方法自身的信息先添加到结果中
-                        finalResultBuilder.append(formatMethod(targetMethod)).append("\n")
-
-                        // 3. 递归查找调用链，并获取结果字符串列表
-                        val callChainLines = findAndPrintCallers(
-                            targetMethod,
-                            project,
-                            1,
-                            setOf(targetMethod),
-                            indicator,
-                            scope
-                        )
-
-                        // 4. 将调用链结果追加到总结果中
-                        finalResultBuilder.append(callChainLines.joinToString("\n"))
-
-                        // 检查任务是否被取消
-                        indicator.checkCanceled()
-                    }
-
-                    try {
-                        val visualizer = CallHierarchyVisualizer(4)
-                        visualizer.parseAndBuildGraph(finalResultBuilder.toString())
-                        // [修改] 使用从对话框传入的参数
-                        visualizer.renderGraph(outputFilename, true, outputPath)
-                        consoleView.print("图表已成功导出！\n 路径为:${outputPath}${File.separator}${outputFilename}", ConsoleViewContentType.SYSTEM_OUTPUT)
-                    } catch (e: Exception) {
-                        // 打印更详细的错误到控制台
-                        val sw = StringWriter()
-                        e.printStackTrace(PrintWriter(sw))
-                        consoleView.print("图表导出失败: ${e.message}\n$sw", ConsoleViewContentType.ERROR_OUTPUT)
-                    }
-
-                }
-            }
-        )
-    }
-
-    /**
-     * [重构] 递归查找方法的调用者，并返回字符串列表
-     *
-     * @return 返回一个包含所有调用链行的字符串列表
-     */
-    private fun findAndPrintCallers(
-        method: PsiMethod,
-        project: Project,
-        indentLevel: Int,
-        path: Set<PsiMethod>,
-        indicator: ProgressIndicator,
-        scope: AnalysisScope // [新增]
-    ): List<String> {
-        indicator.checkCanceled()
-        val resultLines = mutableListOf<String>()
-
-        val callingMethods = ApplicationManager.getApplication().runReadAction<List<PsiMethod>> {
-            val searchScope = GlobalSearchScope.projectScope(project)
-            val references = ReferencesSearch.search(method, searchScope).findAll()
-
-            val allCallers = references
-                .mapNotNull { PsiTreeUtil.getParentOfType(it.element, PsiMethod::class.java) }
-                .distinct()
-
-            if (scope == AnalysisScope.ALL) {
-                allCallers // 在 lambda 中，可以直接返回值，无需 `return@...`
-            } else {
-                val projectFileIndex = ProjectFileIndex.getInstance(project)
-                // [修正] 将 filter 的结果作为 else 分支的返回值
-                allCallers.filter { caller ->
-                    val virtualFile = caller.containingFile?.virtualFile ?: return@filter false
-                    val isInTestSources = projectFileIndex.isInTestSourceContent(virtualFile)
-
-                    when (scope) {
-                        AnalysisScope.PRODUCTION -> !isInTestSources
-                        AnalysisScope.TEST -> isInTestSources
-                        AnalysisScope.ALL -> true
-                    }
-                }
-            }
-        }
-        // 后续的循环和递归逻辑完全不变
-        for (caller in callingMethods) {
-            val isInPath = ApplicationManager.getApplication().runReadAction<Boolean> { caller in path }
-            if (isInPath) {
-                val indent = " ".repeat(4 * indentLevel)
-                // 将递归提示信息也加入结果列表
-                resultLines.add("$indent[... Recursive call to ${formatMethod(caller)} ...]")
-                continue
-            }
-
-            val indent = " ".repeat(4 * indentLevel)
-            // 将当前调用者信息加入结果列表
-            resultLines.add("$indent${formatMethod(caller)}")
-
-            val newPath = ApplicationManager.getApplication().runReadAction<Set<PsiMethod>> { path + method }
-
-            // [修改] 将作用域参数继续传递给递归调用
-            val subCallLines = findAndPrintCallers(caller, project, indentLevel + 1, newPath, indicator, scope)
-            resultLines.addAll(subCallLines)
-        }
-
-        return resultLines
-    }
-
-// formatMethod 方法保持不变，它仍然返回单个格式化的字符串，这很适合被复用。
-// ...
     /**
      * 格式化 PsiMethod 的输出 (修正版)
      */
@@ -321,4 +189,121 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") { // 更�
         toolWindow.show(null)
         return consoleView
     }
+    // CallHierarchyGraphAction.kt (部分修改)
+    private fun runAnalysisInBackground(
+        project: Project,
+        methods: List<PsiMethod>,
+        consoleView: ConsoleView,
+        outputPath: String,
+        outputFilename: String,
+        scope: AnalysisScope,
+    ) {
+        ProgressManager.getInstance().run(
+            object : Task.Backgroundable(project, "分析方法调用链", true) {
+                override fun run(indicator: ProgressIndicator) {
+                    // 新的数据收集器
+                    val nodeManager = NodeManager()
+                    val allNodes = mutableMapOf<String, NodeData>() // ID -> NodeData
+                    val allEdges = mutableListOf<EdgeData>()
+                    val processedEdges = mutableSetOf<String>() // 防止重复边
+
+                    methods.forEach { targetMethod ->
+                        indicator.text = "正在分析: ${targetMethod.name}"
+
+                        val initialMethodContent = formatMethod(targetMethod)
+                        val (methodId, methodNodeData) = nodeManager.getOrGenerateNode(initialMethodContent)
+                        allNodes[methodId] = methodNodeData
+
+                        // 递归查找并填充 allNodes 和 allEdges
+                        findCallersRecursive(
+                            targetMethod, project, setOf(targetMethod), indicator, scope,
+                            nodeManager, allNodes, allEdges, processedEdges
+                        )
+
+                        indicator.checkCanceled()
+                    }
+
+                    // 构建最终的 GraphData 对象
+                    val graphData = GraphData(nodes = allNodes.values.toList(), edges = allEdges)
+
+                    try {
+                        // 使用新的 Visualizer
+                        val visualizer = CallHierarchyVisualizer()
+                        visualizer.renderGraph(graphData, outputFilename, true, outputPath)
+                        consoleView.print("图表已成功导出！\n路径为:${outputPath}${File.separator}${outputFilename}.html", ConsoleViewContentType.SYSTEM_OUTPUT)
+                    } catch (e: Exception) {
+                        val sw = StringWriter()
+                        e.printStackTrace(PrintWriter(sw))
+                        consoleView.print("图表导出失败: ${e.message}\n$sw", ConsoleViewContentType.ERROR_OUTPUT)
+                    }
+                }
+            }
+        )
+    }
+
+    // 需要一个新的递归函数
+    private fun findCallersRecursive(
+        method: PsiMethod,
+        project: Project,
+        path: Set<PsiMethod>,
+        indicator: ProgressIndicator,
+        scope: AnalysisScope,
+        nodeManager: NodeManager,
+        allNodes: MutableMap<String, NodeData>,
+        allEdges: MutableList<EdgeData>,
+        processedEdges: MutableSet<String>
+    ) {
+        indicator.checkCanceled()
+
+        val parentMethodContent = formatMethod(method)
+        val (parentId, parentNodeData) = nodeManager.getOrGenerateNode(parentMethodContent)
+        allNodes[parentId] = parentNodeData
+
+        // 查找调用者的逻辑保持不变
+        val callingMethods = ApplicationManager.getApplication().runReadAction<List<PsiMethod>> {
+            val searchScope = GlobalSearchScope.projectScope(project)
+            val references = ReferencesSearch.search(method, searchScope).findAll()
+
+            val allCallers = references
+                .mapNotNull { PsiTreeUtil.getParentOfType(it.element, PsiMethod::class.java) }
+                .distinct()
+
+            if (scope == AnalysisScope.ALL) {
+                allCallers // 在 lambda 中，可以直接返回值，无需 `return@...`
+            } else {
+                val projectFileIndex = ProjectFileIndex.getInstance(project)
+                // [修正] 将 filter 的结果作为 else 分支的返回值
+                allCallers.filter { caller ->
+                    val virtualFile = caller.containingFile?.virtualFile ?: return@filter false
+                    val isInTestSources = projectFileIndex.isInTestSourceContent(virtualFile)
+
+                    when (scope) {
+                        AnalysisScope.PRODUCTION -> !isInTestSources
+                        AnalysisScope.TEST -> isInTestSources
+                        AnalysisScope.ALL -> true
+                    }
+                }
+            }
+        }
+
+        for (caller in callingMethods) {
+            if (caller in path) { // 循环依赖
+                continue
+            }
+
+            val childMethodContent = formatMethod(caller)
+            val (childId, childNodeData) = nodeManager.getOrGenerateNode(childMethodContent)
+            allNodes[childId] = childNodeData
+
+            // 添加边 (从调用者指向被调用者，即 child -> parent)
+            val edgeId = "$childId -> $parentId"
+            if (processedEdges.add(edgeId)) {
+                allEdges.add(EdgeData(source = childId, target = parentId))
+            }
+
+            val newPath = ApplicationManager.getApplication().runReadAction<Set<PsiMethod>> { path + method }
+            findCallersRecursive(caller, project, newPath, indicator, scope, nodeManager, allNodes, allEdges, processedEdges)
+        }
+    }
+
 }

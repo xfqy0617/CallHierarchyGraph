@@ -1,814 +1,112 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>{graph_name}</title>
+    <title>Call Hierarchy Graph</title>
     <style>
-        body {
-            margin: 0;
-            padding: 20px;
-            background: #f5f5f5;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-        .controls {
-            display: flex;
-            gap: 10px;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 10px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            backdrop-filter: blur(5px);
-            width: fit-content;
-        }
-        .graph-container {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            cursor: default;
-        }
-        .mode-button {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            background: rgba(240, 240, 240, 0.9);
-            transition: all 0.3s ease;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .mode-button.active {
-            background: rgba(76, 175, 80, 0.9);
-            color: white;
-        }
-        .mode-button:hover {
-            background: rgba(220, 220, 220, 0.9);
-        }
-        .mode-button.active:hover {
-            background: rgba(66, 165, 70, 0.9);
-        }
-        .delete-button {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            background: rgba(244, 67, 54, 0.9);
-            color: white;
-            transition: all 0.3s ease;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .delete-button:hover {
-            background: rgba(211, 47, 47, 0.9);
-        }
-        .delete-button:disabled {
-            background: rgba(244, 67, 54, 0.5);
-            cursor: not-allowed;
-        }
-        .delete-button:disabled:hover {
-            background: rgba(244, 67, 54, 0.5);
-        }
-        svg {
+        body, html { margin: 0; padding: 0; height: 100%; overflow: hidden; }
+        #cy {
             width: 100%;
-            height: auto;
-            max-width: 100%;
-        }
-        /* 节点基础样式 */
-        svg g {
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-
-        svg g path {
-            stroke: black;
-        }
-        svg g:hover {
-            filter: brightness(0.95);
-        }
-        /* 节点高亮样式 */
-        svg g.highlighted {
-            filter: brightness(1.15); /* 增加亮度高亮效果 */
-            stroke-width: 2px !important; /*略微加粗轮廓，增强高亮 */
-            transition: all 0.3s ease;
-        }
-        svg g.dimmed {
-            opacity: 0.1;  /* 进一步降低不透明度，使淡化更明显 */
-            transition: opacity 0.3s ease;
-        }
-        .class-filter {
-            padding: 8px 16px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            background: white;
-            cursor: pointer;
-            font-size: 14px;
-            min-width: 200px;
-            position: relative;
-        }
-        .class-filter:hover {
-            border-color: #999;
-        }
-        .class-filter:focus {
-            outline: none;
-            border-color: #0062c4;
-        }
-        .class-filter::placeholder {
-            color: #999;
-        }
-        .class-filter-container {
-            position: relative;
-            display: inline-block;
-        }
-        .class-filter-dropdown {
+            height: 100%;
             position: absolute;
-            top: 100%;
+            top: 0;
             left: 0;
-            right: 0;
-            background: white;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            margin-top: 4px;
-            max-height: 300px;
-            overflow-y: auto;
-            display: none;
-            z-index: 1000;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        .class-filter-dropdown.show {
-            display: block;
-        }
-        .class-filter-option {
-            padding: 8px 16px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .class-filter-option:hover {
-            background-color: #f5f5f5;
-        }
-        .class-filter-option.selected {
-            background-color: #e3f2fd;
-        }
-        .global-search {
-            padding: 8px 16px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            background: white;
-            font-size: 14px;
-            min-width: 200px;
-            transition: all 0.3s ease;
-        }
-        .search-container {
-            position: relative;
-            display: flex;
-            gap: 8px;
-            align-items: center;
-        }
-        .search-button {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            background: rgba(76, 175, 80, 0.9);
-            color: white;
-            transition: all 0.3s ease;
-            font-weight: 500;
-        }
-        .search-button:hover {
-            background: rgba(66, 165, 70, 0.9);
-        }
-        .search-domain {
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            background: white;
-            font-size: 14px;
-            cursor: pointer;
-        }
-        .search-domain:hover {
-            border-color: #999;
-        }
-        .search-domain:focus {
-            outline: none;
-            border-color: #0062c4;
-        }
-        .search-suggestions {
-            position: absolute;
-            top: 100%;
-            left: 0;
-            right: 0;
-            background: white;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            margin-top: 4px;
-            max-height: 300px;
-            overflow-y: auto;
-            display: none;
-            z-index: 1000;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .search-suggestions.show {
-            display: block;
-        }
-        .search-suggestion-item {
-            padding: 8px 16px;
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .search-suggestion-item:hover {
-            background-color: #f5f5f5;
-        }
+        /* 你可以添加一些控制面板的CSS */
     </style>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const svg = document.querySelector('svg');
-            if (!svg) return;
-
-            // 添加模式切换功能
-            let highlightParent = true;  // 默认高亮父级
-            let highlightChildren = true;
-            let currentlySelectedNode = null;  // 存储当前选中的节点
-            // let currentlySelectedClass = null; // 存储当前选中的类名
-            const modeButtons = document.querySelectorAll('.mode-button');
-            // 添加全局搜索功能
-            const globalSearch = document.getElementById('globalSearch');
-            // 存储所有节点
-            const nodes = svg.querySelectorAll('g');
-            // 存储节点关系数据
-            const nodeRelations = "{node_relations}";
-
-
-            // 更新节点高亮状态的函数
-            function updateNodeHighlight() {
-                // 重置所有节点状态
-                resetNodes();
-
-                if (currentlySelectedNode) {
-                    // 如果当前选中了单个节点，则只处理该节点
-                    const nodesToHighlight = getRelatedNodes(currentlySelectedNode.id);
-                    nodes.forEach(n => {
-                        if (nodesToHighlight.has(n.id)) {
-                            n.classList.add('highlighted');
-                        } else if (isGraph(n.id)) {
-                            // 保持图形节点不变
-                        } else if (isEdge(n.id)
-                            && nodesToHighlight.has(edgeName(n).split('->')[0])
-                            && nodesToHighlight.has(edgeName(n).split('->')[1])) {
-                            n.classList.add('highlighted');
-                        } else {
-                            n.classList.add('dimmed');
-                        }
-                    });
-                }
-            }
-
-            modeButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    const mode = this.dataset.mode;
-                    // 切换状态
-                    if (mode === 'parent') {
-                        highlightParent = !highlightParent;
-                        this.classList.toggle('active');
-                    } else if (mode === 'children') {
-                        highlightChildren = !highlightChildren;
-                        this.classList.toggle('active');
-                    }
-
-                    // 更新当前选中节点的高亮状态
-                    updateNodeHighlight();
-                });
-            });
-
-            // 重置所有节点状态
-            function resetNodes() {
-                nodes.forEach(node => {
-                    node.classList.remove('highlighted', 'dimmed');
-                    // 恢复原始样式
-                    node.style.filter = '';
-                    node.style.stroke = '';
-                    node.style.strokeWidth = '';
-                });
-            }
-
-            function isNode(id) {
-                return id.includes('node');
-            }
-
-            function isGraph(id) {
-                return id.includes('graph');
-            }
-
-            function isEdge(id) {
-                return id.includes('edge');
-            }
-
-            function edgeName(node) {
-                const title = node.querySelector('title');
-                if (title) {
-                    return title.textContent;
-                }
-            }
-
-            // 获取所有相关节点
-            function getRelatedNodes(nodeId) {
-                let nodesToHighlight = new Set([nodeId]);
-                let nodesToProcess = new Set([nodeId]);
-
-                if (highlightParent) {
-                    // 高亮父节点
-                    while (nodesToProcess.size > 0) {
-                        const currentNodes = new Set(nodesToProcess);
-                        nodesToProcess.clear();
-
-                        currentNodes.forEach(currentId => {
-                            const parents = nodeRelations.parent_map[currentId] || [];
-                            parents.forEach(parentId => {
-                                if (!nodesToHighlight.has(parentId)) {
-                                    nodesToHighlight.add(parentId);
-                                    nodesToProcess.add(parentId);
-                                }
-                            });
-                        });
-                    }
-                }
-
-                if (highlightChildren) {
-                    // 重置处理集合，只包含当前节点
-                    nodesToProcess = new Set([nodeId]);
-
-                    // 高亮子节点
-                    while (nodesToProcess.size > 0) {
-                        const currentNodes = new Set(nodesToProcess);
-                        nodesToProcess.clear();
-
-                        currentNodes.forEach(currentId => {
-                            const children = nodeRelations.children_map[currentId] || [];
-                            children.forEach(childId => {
-                                if (!nodesToHighlight.has(childId)) {
-                                    nodesToHighlight.add(childId);
-                                    nodesToProcess.add(childId);
-                                }
-                            });
-                        });
-                    }
-                }
-
-                return nodesToHighlight;
-            }
-
-            // 获取所有类名并初始化筛选框
-            function initializeClassFilter() {
-                const classFilter = document.getElementById('classFilter');
-                const classNames = new Set();
-
-                // 从所有节点中提取类名
-                nodes.forEach(node => {
-                    if (isNode(node.id)) {
-                        const textElements = node.querySelectorAll('text');
-                        textElements.forEach(text => {
-                            if (text.getAttribute('font-size') === '14.00') {
-                                classNames.add(text.textContent.trim());
-                            }
-                        });
-                    }
-                });
-
-                // 将类名添加到下拉列表
-                const sortedClassNames = Array.from(classNames).sort();
-                sortedClassNames.forEach(className => {
-                    const option = document.createElement('div');
-                    option.className = 'class-filter-option';
-                    option.textContent = className;
-                    option.dataset.value = className;
-                });
-
-                // 点击输入框外部关闭下拉列表
-                document.addEventListener('click', function(e) {
-                    // todo ddd
-                });
-
-                // 添加搜索功能
-                classFilter.addEventListener('input', function(e) {
-                    const searchText = e.target.value.toLowerCase();
-                    // const options = dropdown.querySelectorAll('.class-filter-option');
-                    let hasVisibleOptions = false;
-
-                    options.forEach(option => {
-                        const className = option.textContent.toLowerCase();
-                        if (className.includes(searchText)) {
-                            option.style.display = '';
-                            hasVisibleOptions = true;
-                        } else {
-                            option.style.display = 'none';
-                        }
-                    });
-
-
-                    // 如果输入框为空，清除选中状态
-                    if (!searchText) {
-                        resetNodes();
-                    }
-                });
-
-            }
-
-
-            // 添加删除按钮
-            const deleteButton = document.getElementById('deleteButton');
-            deleteButton.disabled = true; // 初始状态置灰
-
-            // 获取节点的所有相关节点（包括父节点和子节点）
-            function getAllRelatedNodes(nodeId) {
-                const relatedNodes = new Set([nodeId]);
-                const nodesToProcess = new Set([nodeId]);
-
-                // 获取所有父节点
-                while (nodesToProcess.size > 0) {
-                    const currentNodes = new Set(nodesToProcess);
-                    nodesToProcess.clear();
-
-                    currentNodes.forEach(currentId => {
-                        const parents = nodeRelations.parent_map[currentId] || [];
-                        parents.forEach(parentId => {
-                            if (!relatedNodes.has(parentId)) {
-                                relatedNodes.add(parentId);
-                                nodesToProcess.add(parentId);
-                            }
-                        });
-                    });
-                }
-
-                // 重置处理集合，只包含当前节点
-                nodesToProcess.add(nodeId);
-
-                // 获取所有子节点
-                while (nodesToProcess.size > 0) {
-                    const currentNodes = new Set(nodesToProcess);
-                    nodesToProcess.clear();
-
-                    currentNodes.forEach(currentId => {
-                        const children = nodeRelations.children_map[currentId] || [];
-                        children.forEach(childId => {
-                            if (!relatedNodes.has(childId)) {
-                                relatedNodes.add(childId);
-                                nodesToProcess.add(childId);
-                            }
-                        });
-                    });
-                }
-
-                return relatedNodes;
-            }
-
-            // 判断节点是否是独占的
-            function isExclusiveNode(nodeId, targetNodeId) {
-                const targetRelatedNodes = getAllRelatedNodes(targetNodeId);
-                const nodeRelatedNodes = getAllRelatedNodes(nodeId);
-
-                // 检查节点是否只与目标节点相关
-                for (const relatedNodeId of nodeRelatedNodes) {
-                    if (relatedNodeId === nodeId) continue; // 跳过自身
-                    if (!targetRelatedNodes.has(relatedNodeId)) {
-                        return false;
-                    }
-                }
-
-                return true;
-            }
-
-            // 获取要删除的节点集合
-            function getNodesToDelete(nodeId) {
-                const nodesToDelete = new Set([nodeId]);
-                const targetRelatedNodes = getAllRelatedNodes(nodeId);
-
-                // 检查每个相关节点是否是独占的
-                for (const relatedNodeId of targetRelatedNodes) {
-                    if (relatedNodeId === nodeId) continue; // 跳过目标节点自身
-                    if (isExclusiveNode(relatedNodeId, nodeId)) {
-                        nodesToDelete.add(relatedNodeId);
-                    }
-                }
-
-                return nodesToDelete;
-            }
-
-            // 删除节点及其相关边
-            function deleteNodes(nodeIds) {
-                nodeIds.forEach(nodeId => {
-                    // 删除节点
-                    const node = document.getElementById(nodeId);
-                    if (node) {
-                        node.remove();
-                    }
-
-                    // 删除相关的边
-                    const edges = document.querySelectorAll('g.edge');
-                    edges.forEach(edge => {
-                        const title = edge.querySelector('title');
-                        if (title) {
-                            const [source, target] = title.textContent.split('->');
-                            if (nodeIds.has(source) || nodeIds.has(target)) {
-                                edge.remove();
-                            }
-                        }
-                    });
-
-                    // 从关系映射中删除节点
-                    delete nodeRelations.parent_map[nodeId];
-                    delete nodeRelations.children_map[nodeId];
-
-                    // 清理其他节点中的引用
-                    Object.keys(nodeRelations.parent_map).forEach(key => {
-                        nodeRelations.parent_map[key] = nodeRelations.parent_map[key].filter(id => !nodeIds.has(id));
-                    });
-                    Object.keys(nodeRelations.children_map).forEach(key => {
-                        nodeRelations.children_map[key] = nodeRelations.children_map[key].filter(id => !nodeIds.has(id));
-                    });
-                });
-
-                // 重置状态
-                resetNodes();
-                // resetClassFilter();
-                currentlySelectedNode = null;
-                // currentlySelectedClass = null;
-                deleteButton.disabled = true; // 删除后重置按钮状态
-            }
-
-            // 修改节点点击事件处理
-            nodes.forEach(node => {
-                node.addEventListener('click', function(event) {
-                    event.stopPropagation();
-                    resetNodes();
-
-                    if (!isNode(this.id)) {
-                        return;
-                    }
-
-                    // 更新当前选中的节点
-                    currentlySelectedNode = this;
-
-                    // 启用删除按钮
-                    deleteButton.disabled = false;
-
-                    // 获取需要高亮的节点
-                    const nodesToHighlight = getRelatedNodes(this.id);
-
-                    // 高亮所有相关节点
-                    nodes.forEach(n => {
-                        if (nodesToHighlight.has(n.id)) {
-                            n.classList.add('highlighted');
-                        } else if (isGraph(n.id)) {
-                            // 保持图形节点不变
-                        } else if (isEdge(n.id)
-                            && nodesToHighlight.has(edgeName(n).split('->')[0])
-                            && nodesToHighlight.has(edgeName(n).split('->')[1])) {
-                            n.classList.add('highlighted');
-                        } else {
-                            n.classList.add('dimmed');
-                        }
-                    });
-
-                    // 如果有搜索文本，重新应用搜索高亮
-                    const searchText = globalSearch.value.trim();
-                    if (searchText) {
-                        searchAndHighlightNodes(searchText);
-                    }
-                });
-            });
-
-
-            // 获取节点的所有文本内容
-            function getNodeText(node) {
-                const textElements = node.querySelectorAll('text');
-                return Array.from(textElements).map(text => text.textContent.trim()).join(' ');
-            }
-
-            // 搜索并高亮匹配的节点
-            function searchAndHighlightNodes(searchText) {
-                if (!searchText) {
-                    resetNodes();
-                    deleteButton.disabled = true;
-                    return;
-                }
-
-                const searchLower = searchText.toLowerCase();
-                let foundNodes = new Set();
-
-                // 查找所有匹配的节点
-                nodes.forEach(node => {
-                    if (!isNode(node.id)) return;
-
-                    const nodeText = getNodeText(node).toLowerCase();
-                    if (nodeText.includes(searchLower)) {
-                        foundNodes.add(node.id);
-                    }
-                });
-
-                if (foundNodes.size > 0) {
-                    // 收集所有需要高亮的节点
-                    let nodesToHighlight = new Set();
-                    foundNodes.forEach(nodeId => {
-                        const relatedNodes = getRelatedNodes(nodeId);
-                        relatedNodes.forEach(id => nodesToHighlight.add(id));
-                    });
-
-                    // 高亮所有相关节点
-                    nodes.forEach(n => {
-                        if (nodesToHighlight.has(n.id)) {
-                            n.classList.add('highlighted');
-                        } else if (isGraph(n.id)) {
-                            // 保持图形节点不变
-                        } else if (isEdge(n.id)
-                            && nodesToHighlight.has(edgeName(n).split('->')[0])
-                            && nodesToHighlight.has(edgeName(n).split('->')[1])) {
-                            n.classList.add('highlighted');
-                        } else {
-                            n.classList.add('dimmed');
-                        }
-                    });
-
-                    // 启用删除按钮，但只有在有选中节点时才真正启用
-                    deleteButton.disabled = !currentlySelectedNode;
-                } else {
-                    resetNodes();
-                    deleteButton.disabled = true;
-                }
-            }
-
-            // 添加应用域选择和模糊搜索功能
-            const searchDomain = document.getElementById('searchDomain');
-            const searchSuggestions = document.getElementById('searchSuggestions');
-
-            // 获取指定应用域的所有值
-            function getDomainValues(domain) {
-                const values = new Set();
-                nodes.forEach(node => {
-                    if (!isNode(node.id)) return;
-
-                    const textElements = node.querySelectorAll('text');
-                    textElements.forEach(text => {
-                        const fontSize = text.getAttribute('font-size');
-                        let shouldAdd = false;
-
-                        switch (domain) {
-                            case 'class':
-                                shouldAdd = fontSize === '14.00';
-                                break;
-                            case 'method':
-                                shouldAdd = fontSize === '12.00';
-                                break;
-                            case 'package':
-                                shouldAdd = fontSize === '8.00';
-                                break;
-                        }
-
-                        if (shouldAdd) {
-                            values.add(text.textContent.trim());
-                        }
-                    });
-                });
-
-                return Array.from(values).sort();
-            }
-
-            // 更新搜索建议
-            function updateSearchSuggestions(searchText) {
-                const domain = searchDomain.value;
-                if (!domain) {
-                    searchSuggestions.classList.remove('show');
-                    return;
-                }
-
-                const values = getDomainValues(domain);
-                const searchLower = searchText.toLowerCase();
-                const filteredValues = values.filter(value =>
-                    value.toLowerCase().includes(searchLower)
-                );
-
-                if (filteredValues.length > 0) {
-                    searchSuggestions.innerHTML = '';
-                    filteredValues.forEach(value => {
-                        const div = document.createElement('div');
-                        div.className = 'search-suggestion-item';
-                        div.textContent = value;
-                        div.addEventListener('click', () => {
-                            globalSearch.value = value;
-                            searchSuggestions.classList.remove('show');
-                        });
-                        searchSuggestions.appendChild(div);
-                    });
-                    searchSuggestions.classList.add('show');
-                } else {
-                    searchSuggestions.classList.remove('show');
-                }
-            }
-
-            // 修改搜索输入事件监听
-            globalSearch.addEventListener('input', function(e) {
-                const searchText = e.target.value.trim();
-                updateSearchSuggestions(searchText);
-            });
-
-            // 添加搜索按钮点击事件
-            const searchButton = document.getElementById('searchButton');
-            searchButton.addEventListener('click', function() {
-                resetNodes()
-                const searchText = globalSearch.value.trim();
-                searchAndHighlightNodes(searchText);
-            });
-
-            // 添加回车键触发搜索
-            globalSearch.addEventListener('keydown', function(e) {
-                if (e.key === 'Enter') {
-                    resetNodes()
-                    const searchText = e.target.value.trim();
-                    searchAndHighlightNodes(searchText);
-                }
-            });
-
-            // 添加应用域选择事件监听
-            searchDomain.addEventListener('change', function() {
-                const searchText = globalSearch.value.trim();
-                if (this.value) {
-                    updateSearchSuggestions(searchText);
-                } else {
-                    searchSuggestions.classList.remove('show');
-                }
-            });
-
-            // 点击外部关闭搜索建议
-            document.addEventListener('click', function(e) {
-                if (!globalSearch.contains(e.target) && !searchSuggestions.contains(e.target)) {
-                    searchSuggestions.classList.remove('show');
-                }
-            });
-
-            // 修改删除节点函数，在删除后更新搜索建议
-            const originalDeleteNodes = deleteNodes;
-            deleteNodes = function(nodeIds) {
-                originalDeleteNodes(nodeIds);
-                const searchText = globalSearch.value.trim();
-                if (searchDomain.value) {
-                    updateSearchSuggestions(searchText);
-                }
-            };
-
-            // 修改点击空白处处理
-            svg.addEventListener('click', function(event) {
-                const isNodeClick = event.target.closest('g');
-                if (!isNodeClick) {
-                    resetNodes();
-                    // resetClassFilter();
-                    currentlySelectedNode = null;
-                    deleteButton.disabled = true;
-                    globalSearch.value = ''; // 清空搜索框
-                    searchSuggestions.classList.remove('show');
-                }
-            });
-
-            // 修改删除按钮点击事件
-            deleteButton.addEventListener('click', function() {
-                if (this.disabled) return;
-
-                // 只删除当前选中的节点
-                if (currentlySelectedNode) {
-                    const nodesToDelete = getNodesToDelete(currentlySelectedNode.id);
-                    deleteNodes(nodesToDelete);
-                    globalSearch.value = ''; // 清空搜索框
-                    searchSuggestions.classList.remove('show');
-                }
-            });
-
-            // 初始化类名筛选框
-            initializeClassFilter();
-        });
-    </script>
+    <!-- 引入 Cytoscape.js -->
+    <script src="https://unpkg.com/cytoscape/dist/cytoscape.min.js"></script>
+    <!-- 也可以引入布局算法，例如 cola -->
+    <script src="https://unpkg.com/cytoscape-cola/cytoscape-cola.js"></script>
 </head>
 <body>
-<div class="controls">
-    <button class="mode-button active" data-mode="parent">高亮下游</button>
-    <button class="mode-button active" data-mode="children">高亮上游</button>
+<div id="cy"></div>
 
-    <div class="search-container">
-        <select id="searchDomain" class="search-domain">
-            <option value="">应用域</option>
-            <option value="class">类名</option>
-            <option value="method">方法名</option>
-            <option value="package">包名</option>
-        </select>
-        <input type="text" id="globalSearch" class="global-search" placeholder="搜索节点内容...">
-        <button id="searchButton" class="search-button">搜索</button>
-        <div id="searchSuggestions" class="search-suggestions"></div>
-    </div>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // 这就是我们的数据契约！
+        const graphData = '{graph_data_placeholder}';
 
-    <button id="deleteButton" class="delete-button">删除节点</button>
-</div>
-<div class="graph-container">
-    {svg_content}
-</div>
+        const cy = cytoscape({
+            container: document.getElementById('cy'), // 渲染容器
+
+            // 1. 定义元素 (节点和边)
+            elements: {
+                nodes: graphData.nodes.map(node => ({
+                    data: {
+                        id: node.id,
+                        label: `${node.className}\n${node.methodName}`,
+                        ...node // 将所有节点数据附加到 data 对象
+                    }
+                })),
+                edges: graphData.edges.map(edge => ({
+                    data: {
+                        id: `${edge.source}-${edge.target}`,
+                        source: edge.source,
+                        target: edge.target
+                    }
+                }))
+            },
+
+            // 2. 定义样式
+            style: [
+                {
+                    selector: 'node',
+                    style: {
+                        'background-color': 'data(classColor)', // 使用后端传来的颜色
+                        'label': 'data(label)',
+                        'text-wrap': 'wrap',
+                        'text-valign': 'center',
+                        'font-size': '10px',
+                        'color': '#fff',
+                        'text-outline-width': 2,
+                        'text-outline-color': 'data(classColor)'
+                    }
+                },
+                {
+                    selector: 'edge',
+                    style: {
+                        'width': 2,
+                        'line-color': '#ccc',
+                        'target-arrow-color': '#ccc',
+                        'target-arrow-shape': 'triangle',
+                        'curve-style': 'bezier'
+                    }
+                },
+                // 高亮样式
+                {
+                    selector: '.highlighted',
+                    style: {
+                        'background-color': '#61bffc',
+                        'line-color': '#61bffc',
+                        'target-arrow-color': '#61bffc',
+                        'transition-property': 'background-color, line-color, target-arrow-color',
+                        'transition-duration': '0.5s'
+                    }
+                }
+            ],
+
+            // 3. 定义布局
+            layout: {
+                name: 'dagre', // 有向无环图布局，需要引入 cytoscape-dagre.js
+                // 或者使用 'cola', 'breadthfirst', 'circle' 等
+                rankDir: 'LR' // 从左到右
+            }
+        });
+
+        // 4. 添加交互
+        cy.on('tap', 'node', function(evt){
+            const node = evt.target;
+            cy.elements().removeClass('highlighted');
+            node.successors().union(node.predecessors()).addClass('highlighted');
+            node.addClass('highlighted');
+        });
+
+        cy.on('tap', function(evt){
+            if(evt.target === cy){
+                cy.elements().removeClass('highlighted');
+            }
+        });
+    });
+</script>
 </body>
-</html> 
+</html>

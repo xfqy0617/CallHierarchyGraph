@@ -1,5 +1,6 @@
 package org.xfqy.callhierarchygraph.manager
 
+import org.xfqy.callhierarchygraph.entity.NodeData
 import org.xfqy.callhierarchygraph.util.DistinctDarkColorGenerator
 import org.xfqy.callhierarchygraph.util.Pair
 
@@ -148,4 +149,32 @@ class NodeManager {
             }
         }
     }
+
+    // 返回 NodeData 和它的唯一ID
+    fun getOrGenerateNode(fullNodeContent: String): Pair<String, NodeData> {
+        // 1. 生成或获取唯一 ID 的逻辑保持不变
+        var nodeInfo = nodeMap[fullNodeContent]
+        if (nodeInfo == null) {
+            nodeInfo = NodeInfo.from(fullNodeContent)
+            nodeMap[fullNodeContent] = nodeInfo
+        }
+        var uniqueId = nodeIdMap[nodeInfo]
+        if (uniqueId == null) {
+            uniqueId = "node" + nodeCounter++
+            nodeIdMap[nodeInfo] = uniqueId
+        }
+
+        // 2. 创建 NodeData 对象
+        val nodeData = NodeData(
+            id = uniqueId,
+            className = nodeInfo.className,
+            methodName = nodeInfo.funName,
+            params = nodeInfo.param,
+            packageName = nodeInfo.packageName,
+            classColor = getClassColor(nodeInfo.className) // 颜色生成逻辑复用
+        )
+
+        return Pair(uniqueId, nodeData)
+    }
+
 }
