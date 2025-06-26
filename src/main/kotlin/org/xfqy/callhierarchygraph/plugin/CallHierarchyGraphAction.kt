@@ -80,11 +80,13 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") {
             val outputPath = dialog.getOutputPath()
             val outputFilename = dialog.getOutputFilename()
             val selectedScope = dialog.getSelectedScope()
+            // [优化2] 获取新复选框的状态
+            val skipUncalledMethods = dialog.shouldSkipUncalledMethods()
 
             if (selectedMethods.isNotEmpty() && outputPath.isNotBlank() && outputFilename.isNotBlank()) {
                 val consoleView = getOrCreateConsole(project)
                 consoleView.clear()
-                runAnalysisInBackground(project, selectedMethods, consoleView, outputPath, outputFilename, selectedScope)
+                runAnalysisInBackground(project, selectedMethods, consoleView, outputPath, outputFilename, selectedScope, skipUncalledMethods)
             }
         }
     }
@@ -96,6 +98,8 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") {
         outputPath: String,
         outputFilename: String,
         scope: AnalysisScope,
+        // [优化2] 接收新参数
+        skipUncalledMethods: Boolean
     ) {
         ProgressManager.getInstance().run(
             object : Task.Backgroundable(project, "分析方法调用链", true) {
@@ -124,7 +128,6 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") {
                         indicator.checkCanceled()
                     }
 
-                    // 计算节点的入度和出度以确定其类型
                     val outDegrees = mutableMapOf<String, Int>()
                     val inDegrees = mutableMapOf<String, Int>()
 
@@ -133,17 +136,54 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") {
                         inDegrees[edge.target] = inDegrees.getOrDefault(edge.target, 0) + 1
                     }
 
-                    // 创建最终的 NodeData 列表，包含节点类型信息
-                    val finalNodes = allNodes.values.map { node ->
-                        val nodeType = when {
-                            outDegrees.getOrDefault(node.id, 0) == 0 -> "ROOT" // 调用链顶端
-                            inDegrees.getOrDefault(node.id, 0) == 0 -> "LEAF" // 调用链末端
-                            else -> "INTERMEDIATE"
+                    // [优化2] 在此处实现过滤逻辑
+                    var finalNodes: List<NodeData>
+                    val finalEdges: List<EdgeData>
+
+                    if (skipUncalledMethods) {
+                        // 找出所有需要保留的节点ID
+                        val nodesToKeep = allNodes.values.filter { node ->
+                            // 保留所有非入口节点，或者那些虽然是入口但确实有上游调用的节点
+                            !node.isEntry || inDegrees.getOrDefault(node.id, 0) > 0
+                        }.map { it.id }.toSet()
+
+                        // 过滤节点和边
+                        finalNodes = allNodes.values.filter { it.id in nodesToKeep }
+                        finalEdges = allEdges.filter { it.source in nodesToKeep && it.target in nodesToKeep }
+
+                        // 重新计算过滤后的度数，以便正确设置节点类型
+                        val finalOutDegrees = mutableMapOf<String, Int>()
+                        val finalInDegrees = mutableMapOf<String, Int>()
+                        finalEdges.forEach { edge ->
+                            finalOutDegrees[edge.source] = finalOutDegrees.getOrDefault(edge.source, 0) + 1
+                            finalInDegrees[edge.target] = finalInDegrees.getOrDefault(edge.target, 0) + 1
                         }
-                        node.copy(nodeType = nodeType)
+
+                        // 更新节点类型
+                        val typedFinalNodes = finalNodes.map { node ->
+                            val nodeType = when {
+                                finalOutDegrees.getOrDefault(node.id, 0) == 0 -> "ROOT"
+                                finalInDegrees.getOrDefault(node.id, 0) == 0 -> "LEAF"
+                                else -> "INTERMEDIATE"
+                            }
+                            node.copy(nodeType = nodeType)
+                        }
+                        finalNodes = typedFinalNodes
+
+                    } else {
+                        // 如果不跳过，则使用原始数据
+                        finalEdges = allEdges
+                        finalNodes = allNodes.values.map { node ->
+                            val nodeType = when {
+                                outDegrees.getOrDefault(node.id, 0) == 0 -> "ROOT"
+                                inDegrees.getOrDefault(node.id, 0) == 0 -> "LEAF"
+                                else -> "INTERMEDIATE"
+                            }
+                            node.copy(nodeType = nodeType)
+                        }
                     }
 
-                    val graphData = GraphData(nodes = finalNodes, edges = allEdges)
+                    val graphData = GraphData(nodes = finalNodes, edges = finalEdges)
 
                     try {
                         val visualizer = CallHierarchyVisualizer()
