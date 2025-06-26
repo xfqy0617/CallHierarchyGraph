@@ -3,17 +3,13 @@
 <head>
     <meta charset="UTF-8">
     <title>Call Hierarchy Graph</title>
-    <!-- [核心修复] 将 jQuery 移到 head 中，并使用可靠的 CDN，确保它最先加载 -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-
-    <!-- 依赖库 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
     <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
     <script src="https://unpkg.com/cytoscape-dagre@2.4.0/cytoscape-dagre.js"></script>
     <script src="https://unpkg.com/cytoscape-node-html-label@1.2.0/dist/cytoscape-node-html-label.min.js"></script>
 
     <style>
-        /* --- Basic Layout & Theming --- */
         body, html {
             margin: 0; padding: 0; height: 100%;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -25,18 +21,13 @@
             background-color: #f8f9fa;
             transition: background-color 0.4s ease;
         }
-        body.highlight-active #cy {
-            background-color: #e9ecef;
-        }
+        body.highlight-active #cy { background-color: #e9ecef; }
 
-        /* --- Control Panel --- */
         .controls {
             display: flex; align-items: center; gap: 16px;
             padding: 10px 20px; background-color: #ffffff;
             border-bottom: 1px solid #e9ecef; flex-shrink: 0;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-            position: relative;
-            z-index: 10;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05); z-index: 10;
         }
         .control-group { display: flex; align-items: center; gap: 8px; }
         .control-group label { font-size: 13px; font-weight: 500; color: #495057; }
@@ -51,43 +42,32 @@
         #reset-button { background-color: #6c757d; border-color: #6c757d; }
         #reset-button:hover { background-color: #5a6268; }
 
-        /* --- Node Card & Interaction Styling (关键样式) --- */
         .node-card {
             font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-            border: 1px solid rgba(0,0,0,0.1);
-            border-radius: 6px;
-            padding: 10px 12px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-            width: 300px;
-            user-select: text;
-            pointer-events: none; /* 让点击事件可以穿透到cytoscape画布 */
+            border: 1px solid rgba(0,0,0,0.1); border-radius: 6px;
+            padding: 10px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            width: 300px; user-select: text; pointer-events: none;
             text-align: left;
             transition: opacity 0.4s ease, filter 0.4s ease, transform 0.3s ease, box-shadow 0.3s ease;
         }
-        .node-class-name {
-            font-size: 18px;
-            font-weight: bold;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            margin-bottom: 6px;
-        }
-        .node-method-name { font-size: 14px; font-weight: 600; color: #00529b; margin-bottom: 4px; }
-        .node-params, .node-package-name { font-size: 6px; color: #6c757d; line-height: 1.0; }
-        .node-package-name { margin-top: 2px; border-top: 1px dashed #eee; padding-top: 2px; }
+        .node-class-name { font-size: 14px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px; }
+        .node-method-name { font-size: 13px; font-weight: 600; color: #00529b; margin-bottom: 4px; }
+        .node-params, .node-package-name { font-size: 11px; color: #6c757d; line-height: 1.3; }
+        .node-package-name { margin-top: 6px; border-top: 1px dashed #eee; padding-top: 4px; }
+        .node-card.dimmed { opacity: 0.15; filter: grayscale(80%); }
+        .node-card.highlighted { opacity: 1 !important; filter: none !important; transform: scale(1.02); box-shadow: 0 5px 20px rgba(0, 123, 255, 0.4); }
 
-        /* 黯淡状态 */
-        .node-card.dimmed {
-            opacity: 0.15;
-            filter: grayscale(80%);
+        .context-menu {
+            display: none; position: absolute; z-index: 1000;
+            background-color: #ffffff; border: 1px solid #ccc;
+            border-radius: 5px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 5px 0; min-width: 220px;
         }
-        /* 高亮状态 */
-        .node-card.highlighted {
-            opacity: 1 !important; /* 使用 !important 确保覆盖黯淡样式 */
-            filter: none !important;
-            transform: scale(1.02);
-            box-shadow: 0 5px 20px rgba(0, 123, 255, 0.4);
-        }
+        .context-menu ul { list-style: none; padding: 0; margin: 0; }
+        .context-menu ul li { padding: 8px 15px; font-size: 13px; cursor: pointer; display: flex; align-items: center; }
+        .context-menu ul li:hover { background-color: #007bff; color: white; }
+        .context-menu ul li .icon { margin-right: 10px; font-size: 16px; }
+
     </style>
 </head>
 <body>
@@ -95,12 +75,7 @@
 <div class="controls">
     <div class="control-group">
         <label for="layout-select">Layout:</label>
-        <select id="layout-select">
-            <option value="dagre" selected>Dagre (Tree)</option>
-            <option value="breadthfirst">Breadthfirst</option>
-            <option value="circle">Circle</option>
-            <option value="grid">Grid</option>
-        </select>
+        <select id="layout-select"><option value="dagre" selected>Dagre (Tree)</option><option value="breadthfirst">Breadthfirst</option><option value="circle">Circle</option><option value="grid">Grid</option></select>
     </div>
     <div class="control-group">
         <label for="search-input">Search:</label>
@@ -111,18 +86,18 @@
 
 <div id="cy"></div>
 
+<div id="context-menu" class="context-menu">
+    <ul>
+        <li id="delete-node-btn"><span class="icon">🗑️</span>Delete Node & Prune Chain</li>
+    </ul>
+</div>
+
 <script>
-    // 注册插件
-    if(typeof cytoscapeNodeHtmlLabel === 'function'){
-        cytoscape.use(cytoscapeNodeHtmlLabel);
-    }
-    if(typeof cytoscapeDagre === 'function'){
-        cytoscape.use(cytoscapeDagre);
-    }
+    if(typeof cytoscapeNodeHtmlLabel === 'function') cytoscape.use(cytoscapeNodeHtmlLabel);
+    if(typeof cytoscapeDagre === 'function') cytoscape.use(cytoscapeDagre);
 
     document.addEventListener('DOMContentLoaded', function () {
         const graphData = '{graph_data_placeholder}';
-
         if (!graphData || !graphData.nodes || !graphData.edges) {
             console.error("Graph data is missing or invalid.");
             document.getElementById('cy').innerText = "Error: Could not load graph data.";
@@ -136,34 +111,10 @@
                 edges: graphData.edges.map(edge => ({ data: { id: `edge_${edge.source}_${edge.target}`, source: edge.source, target: edge.target } }))
             },
             style: [
-                {
-                    selector: 'node',
-                    style: {
-                        'background-opacity': 0, 'border-width': 0,
-                        'width': 320, 'height': 110, 'shape': 'rectangle'
-                    }
-                },
-                {
-                    selector: 'edge',
-                    style: {
-                        'width': 2, 'line-color': '#adb5bd', 'target-arrow-color': '#adb5bd',
-                        'target-arrow-shape': 'triangle', 'curve-style': 'bezier',
-                        'transition-property': 'line-color, target-arrow-color, width, opacity',
-                        'transition-duration': '0.3s'
-                    }
-                },
-                // [交互样式] 为Cytoscape的边元素定义高亮和黯淡状态
-                {
-                    selector: 'edge.highlighted',
-                    style: {
-                        'line-color': '#007bff', 'target-arrow-color': '#007bff',
-                        'width': 3.5, 'opacity': 1, 'z-index': 100
-                    }
-                },
-                {
-                    selector: 'edge.dimmed',
-                    style: { 'opacity': 0.1 }
-                }
+                { selector: 'node', style: { 'background-opacity': 0, 'border-width': 0, 'width': 320, 'height': 110, 'shape': 'rectangle' }},
+                { selector: 'edge', style: { 'width': 2, 'line-color': '#adb5bd', 'target-arrow-color': '#adb5bd', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'transition-property': 'line-color, target-arrow-color, width, opacity', 'transition-duration': '0.3s' }},
+                { selector: 'edge.highlighted', style: { 'line-color': '#007bff', 'target-arrow-color': '#007bff', 'width': 3.5, 'opacity': 1, 'z-index': 100 }},
+                { selector: 'edge.dimmed', style: { 'opacity': 0.1 }}
             ],
             layout: { name: 'dagre', rankDir: 'LR', spacingFactor: 1.5 }
         });
@@ -171,7 +122,7 @@
         cy.nodeHtmlLabel([
             {
                 query: 'node', valign: "center", halign: "center",
-                tpl: function(data) {
+                tpl: (data) => {
                     let borderStyle = '', bgColor = '';
                     switch(data.nodeType) {
                         case 'ROOT': borderStyle = 'border-left: 5px solid #b0bec5;'; bgColor = '#eceff1'; break;
@@ -179,67 +130,104 @@
                         default: borderStyle = 'border-left: 5px solid #42a5f5;'; bgColor = '#e3f2fd'; break;
                     }
                     const finalStyle = `${borderStyle} background-color: ${bgColor};`;
-                    return `
-                        <div id="card-${data.id}" class="node-card" style="${finalStyle}">
-                            <div class="node-class-name" style="color: ${data.classColor};" title="${data.className}">${data.className}</div>
-                            <div class="node-method-name" title="${data.methodName}">${data.methodName}</div>
-                            <div class="node-params" title="${data.params}">(${data.params})</div>
-                            <div class="node-package-name" title="${data.packageName}">${data.packageName}</div>
-                        </div>
-                    `;
+                    return `<div id="card-${data.id}" class="node-card" style="${finalStyle}"><div class="node-class-name" style="color: ${data.classColor};" title="${data.className}">${data.className}</div><div class="node-method-name" title="${data.methodName}">${data.methodName}</div><div class="node-params" title="${data.params}">(${data.params})</div><div class="node-package-name" title="${data.packageName}">${data.packageName}</div></div>`;
                 }
             }
         ]);
 
-        // --- 交互逻辑 (现在可以安全地工作了) ---
         function highlightElements(elementsToShow) {
             document.body.classList.add('highlight-active');
-
-            // 1. 黯淡所有元素 (Cytoscape边 + HTML节点卡片)
             cy.edges().addClass('dimmed');
             $('.node-card').addClass('dimmed').removeClass('highlighted');
-
-            // 2. 高亮选中的路径 (Cytoscape边 + HTML节点卡片)
             elementsToShow.edges().removeClass('dimmed').addClass('highlighted');
-            elementsToShow.nodes().forEach(node => {
-                // 使用 jQuery 安全地操作对应的 HTML 卡片
-                $(`#card-${node.id()}`).removeClass('dimmed').addClass('highlighted');
-            });
+            elementsToShow.nodes().forEach(node => $(`#card-${node.id()}`).removeClass('dimmed').addClass('highlighted'));
         }
 
         function resetHighlight() {
             document.body.classList.remove('highlight-active');
-            // 移除所有 Cytoscape 元素和 HTML 卡片的交互样式
             cy.elements().removeClass('dimmed highlighted');
             $('.node-card').removeClass('dimmed highlighted');
         }
 
-        // --- 事件监听 ---
+        const contextMenu = document.getElementById('context-menu');
+        const deleteButton = document.getElementById('delete-node-btn');
+        let targetNodeForMenu = null;
 
-        // 点击节点时，高亮其所有上游和下游调用链
-        cy.on('tap', 'node', (evt) => {
-            const node = evt.target;
-            // successors() 是下游调用，predecessors() 是上游调用
-            const path = node.union(node.predecessors()).union(node.successors());
-            highlightElements(path);
+        cy.on('cxttap', 'node', (evt) => {
+            evt.preventDefault();
+            targetNodeForMenu = evt.target;
+            contextMenu.style.left = evt.originalEvent.pageX + 'px';
+            contextMenu.style.top = evt.originalEvent.pageY + 'px';
+            contextMenu.style.display = 'block';
         });
 
-        // 点击画布空白处，重置高亮
-        cy.on('tap', (evt) => { if (evt.target === cy) resetHighlight(); });
+        cy.on('tap', () => { if (contextMenu.style.display === 'block') contextMenu.style.display = 'none'; });
 
-        // 点击重置按钮
-        document.getElementById('reset-button').addEventListener('click', () => {
-            resetHighlight();
-            document.getElementById('search-input').value = '';
-            cy.fit(null, 50); // 视图居中并缩放以适应所有元素
+        deleteButton.addEventListener('click', () => {
+            if (!targetNodeForMenu) return;
+
+            contextMenu.style.display = 'none';
+
+            // --- 新的、精确的删除逻辑实现 ---
+
+            // 1. 初始化
+            const nodesToPrune = cy.collection(targetNodeForMenu);
+            let queue = [];
+            let processedIds = new Set();
+
+            // 2. 向下游修剪 (BFS)
+            queue.push(...targetNodeForMenu.outgoers().nodes());
+            processedIds.add(targetNodeForMenu.id());
+
+            while (queue.length > 0) {
+                const currentNode = queue.shift();
+                if (processedIds.has(currentNode.id())) continue;
+                processedIds.add(currentNode.id());
+
+                const parents = currentNode.incomers().nodes();
+
+                // 关键判断: 当前节点的所有父节点是否都已在待删除集合中
+                if (parents.every(p => nodesToPrune.has(p))) {
+                    nodesToPrune.merge(currentNode);
+                    queue.push(...currentNode.outgoers().nodes());
+                }
+            }
+
+            // 3. 向上游修剪 (BFS)
+            queue = []; // 重置队列
+            processedIds.clear(); // 重置已处理集合
+            queue.push(...targetNodeForMenu.incomers().nodes());
+            processedIds.add(targetNodeForMenu.id());
+
+            while (queue.length > 0) {
+                const currentNode = queue.shift();
+                if (processedIds.has(currentNode.id())) continue;
+                processedIds.add(currentNode.id());
+
+                const children = currentNode.outgoers().nodes();
+
+                // 关键判断: 当前节点的所有子节点是否都已在待删除集合中
+                // 需处理自调用情况: 如果一个节点只调用自己，且自己将被删除，那它也应被删除。
+                const childrenToCheck = children.filter(c => c.id() !== currentNode.id());
+                if (childrenToCheck.every(c => nodesToPrune.has(c))) {
+                    nodesToPrune.merge(currentNode);
+                    queue.push(...currentNode.incomers().nodes());
+                }
+            }
+
+            // 4. 执行删除
+            if (nodesToPrune.length > 0) {
+                console.log('Pruning nodes:', nodesToPrune.map(n => n.data('methodName')));
+                cy.remove(nodesToPrune);
+            }
+
+            targetNodeForMenu = null;
         });
 
-        // 切换布局
-        document.getElementById('layout-select').addEventListener('change', function () {
-            cy.layout({ name: this.value, rankDir: 'LR', animate: true, spacingFactor: 1.5 }).run();
-        });
+        cy.on('tap', 'node', (evt) => highlightElements(evt.target.union(evt.target.predecessors()).union(evt.target.successors())));
+        document.getElementById('reset-button').addEventListener('click', () => { resetHighlight(); document.getElementById('search-input').value = ''; cy.fit(null, 50); });
+        document.getElementById('layout-select').addEventListener('change', function () { cy.layout({ name: this.value, rankDir: 'LR', animate: true, spacingFactor: 1.5 }).run(); });
 
-        // 搜索功能 (带延迟以优化性能)
         let timeout;
         document.getElementById('search-input').addEventListener('input', function() {
             const query = this.value.toLowerCase().trim();
@@ -247,21 +235,12 @@
             timeout = setTimeout(() => {
                 resetHighlight();
                 if (!query) return;
-
-                const searchResults = cy.nodes().filter(node =>
-                    node.data('className').toLowerCase().includes(query) ||
-                    node.data('methodName').toLowerCase().includes(query) ||
-                    node.data('packageName').toLowerCase().includes(query)
-                );
-
+                const searchResults = cy.nodes().filter(node => node.data('className').toLowerCase().includes(query) || node.data('methodName').toLowerCase().includes(query) || node.data('packageName').toLowerCase().includes(query));
                 if (searchResults.length > 0) {
-                    // 这里我们只高亮匹配的节点本身，而不是整个调用链
                     document.body.classList.add('highlight-active');
                     cy.edges().addClass('dimmed');
                     $('.node-card').addClass('dimmed').removeClass('highlighted');
-                    searchResults.forEach(node => {
-                        $(`#card-${node.id()}`).removeClass('dimmed').addClass('highlighted');
-                    });
+                    searchResults.forEach(node => $(`#card-${node.id()}`).removeClass('dimmed').addClass('highlighted'));
                 }
             }, 300);
         });
