@@ -209,14 +209,17 @@ class SelectMethodsDialog(
         // --- 3. 创建方法列表 (逻辑不变) ---
         val methodList = CheckBoxList<PsiMethod>()
         val methodsToShow = psiClass.methods.filter { !it.isConstructor }
+        // 修改此处的选择逻辑
         methodsToShow.forEach { method ->
-            methodList.addItem(
-                method,
-                formatMethodForDisplay(method),
-                method == methodToSelect
-            )
+            // 如果 methodToSelect 为 null (即右键点击的是类)，则默认选中。
+            // 否则，只选中被指定的那个方法。
+            val shouldBeSelected = if (methodToSelect == null) true else method == methodToSelect
+            methodList.addItem(method, formatMethodForDisplay(method), shouldBeSelected)
         }
-        if (methodsToShow.isNotEmpty() && methodsToShow.all { it == methodToSelect }) {
+
+        // 相应地，更新主复选框的初始状态
+        // 如果 methodToSelect 为 null (全选模式)，或者只有一个方法且被选中，则勾选主复选框
+        if (methodToSelect == null || (methodsToShow.size == 1 && methodsToShow.first() == methodToSelect)) {
             masterCheckbox.isSelected = true
         }
         masterCheckbox.addActionListener {
