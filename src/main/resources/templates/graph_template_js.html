@@ -34,7 +34,7 @@
         select, input[type="text"], button {
             padding: 6px 12px; border-radius: 6px; border: 1px solid #ced4da;
             font-size: 13px; background-color: #fff;
-            transition: border-color 0.2s, box-shadow 0.2s;
+            transition: all 0.2s ease-in-out;
         }
         select:focus, input[type="text"]:focus { outline: none; border-color: #80bdff; box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.25); }
         button { cursor: pointer; background-color: #007bff; color: white; border-color: #007bff; font-weight: 500; }
@@ -47,8 +47,8 @@
             border: 1px solid rgba(0,0,0,0.1); border-radius: 6px;
             padding: 10px 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             width: 300px; user-select: text; pointer-events: none;
-            text-align: left;
-            transition: opacity 0.4s ease, filter 0.4s ease, transform 0.3s ease, box-shadow 0.3s ease;
+            text-align: left; position: relative;
+            transition: opacity 0.4s ease, filter 0.4s ease, transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
         }
         .node-class-name { font-size: 14px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px; }
         .node-method-name { font-size: 13px; font-weight: 600; color: #00529b; margin-bottom: 4px; }
@@ -56,6 +56,17 @@
         .node-package-name { margin-top: 6px; border-top: 1px dashed #eee; padding-top: 4px; }
         .node-card.dimmed { opacity: 0.15; filter: grayscale(80%); }
         .node-card.highlighted { opacity: 1 !important; filter: none !important; transform: scale(1.02); box-shadow: 0 5px 20px rgba(0, 123, 255, 0.4); }
+
+        /* [新功能] 复制成功后的反馈样式 */
+        .node-card.copied { border-color: #28a745; }
+        .copy-feedback {
+            display: none;
+            position: absolute; top: 5px; right: 8px;
+            background-color: #28a745; color: white;
+            padding: 2px 6px; border-radius: 4px;
+            font-size: 10px; font-weight: bold;
+        }
+        .node-card.copied .copy-feedback { display: block; }
 
         .context-menu {
             display: none; position: absolute; z-index: 1000;
@@ -74,21 +85,27 @@
 
 <div class="controls">
     <div class="control-group">
-        <label for="layout-select">Layout:</label>
-        <select id="layout-select"><option value="dagre" selected>Dagre (Tree)</option><option value="breadthfirst">Breadthfirst</option><option value="circle">Circle</option><option value="grid">Grid</option></select>
+        <label for="layout-select">布局:</label>
+        <select id="layout-select">
+            <option value="dagre" selected>Dagre (Tree)</option>
+            <option value="breadthfirst">Breadthfirst</option>
+            <option value="circle">Circle</option>
+            <option value="grid">Grid</option></select>
     </div>
     <div class="control-group">
-        <label for="search-input">Search:</label>
-        <input type="text" id="search-input" placeholder="Search class or method...">
+        <label for="search-input">查询:</label>
+        <input type="text" id="search-input" placeholder="查询类或方法...">
     </div>
-    <button id="reset-button">Reset View & Highlight</button>
+    <button id="reset-button">重置</button>
 </div>
 
 <div id="cy"></div>
 
+<!-- [新功能] 更新右键菜单 HTML -->
 <div id="context-menu" class="context-menu">
     <ul>
-        <li id="delete-node-btn"><span class="icon">🗑️</span>Delete Node & Prune Chain</li>
+        <li id="copy-node-info-btn"><span class="icon">📋</span>复制</li>
+        <li id="delete-node-btn"><span class="icon">🗑️</span>删除节点&修剪链路</li>
     </ul>
 </div>
 
@@ -130,7 +147,13 @@
                         default: borderStyle = 'border-left: 5px solid #42a5f5;'; bgColor = '#e3f2fd'; break;
                     }
                     const finalStyle = `${borderStyle} background-color: ${bgColor};`;
-                    return `<div id="card-${data.id}" class="node-card" style="${finalStyle}"><div class="node-class-name" style="color: ${data.classColor};" title="${data.className}">${data.className}</div><div class="node-method-name" title="${data.methodName}">${data.methodName}</div><div class="node-params" title="${data.params}">(${data.params})</div><div class="node-package-name" title="${data.packageName}">${data.packageName}</div></div>`;
+                    return `<div id="card-${data.id}" class="node-card" style="${finalStyle}">
+                                <div class="copy-feedback">Copied!</div>
+                                <div class="node-class-name" style="color: ${data.classColor};" title="${data.className}">${data.className}</div>
+                                <div class="node-method-name" title="${data.methodName}">${data.methodName}</div>
+                                <div class="node-params" title="${data.params}">(${data.params})</div>
+                                <div class="node-package-name" title="${data.packageName}">${data.packageName}</div>
+                            </div>`;
                 }
             }
         ]);
@@ -149,9 +172,28 @@
             $('.node-card').removeClass('dimmed highlighted');
         }
 
+        // --- [新功能] 复制逻辑 ---
+        function copyNodeInfo(node) {
+            if (!node) return;
+            const data = node.data();
+            const textToCopy = `${data.packageName}.${data.className}#${data.methodName}`;
+
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                console.log('Copied:', textToCopy);
+                const card = $(`#card-${node.id()}`);
+                card.addClass('copied');
+                setTimeout(() => card.removeClass('copied'), 1500); // 1.5秒后移除反馈
+            }).catch(err => {
+                console.error('Failed to copy text:', err);
+                alert('Failed to copy text. See console for details.');
+            });
+        }
+
         const contextMenu = document.getElementById('context-menu');
         const deleteButton = document.getElementById('delete-node-btn');
+        const copyButton = document.getElementById('copy-node-info-btn'); // 新增
         let targetNodeForMenu = null;
+        let lastSelectedNode = null; // [优化] 用于键盘快捷键
 
         cy.on('cxttap', 'node', (evt) => {
             evt.preventDefault();
@@ -161,58 +203,73 @@
             contextMenu.style.display = 'block';
         });
 
-        // [优化] 点击画布空白处后，隐藏菜单并重置所有高亮状态
         cy.on('tap', (evt) => {
-            if (evt.target === cy) { // 检查点击的是否为画布背景
+            if (evt.target === cy) {
                 contextMenu.style.display = 'none';
                 resetHighlight();
+                lastSelectedNode = null; // [优化] 点击空白处，清除选中节点
             }
+        });
+
+        // [优化] 更新节点点击事件，记录最后选中的节点
+        cy.on('tap', 'node', (evt) => {
+            const node = evt.target;
+            lastSelectedNode = node; // 记录
+            highlightElements(node.union(node.predecessors()).union(node.successors()));
+        });
+
+        // --- 右键菜单事件监听 ---
+        copyButton.addEventListener('click', () => {
+            copyNodeInfo(targetNodeForMenu);
+            contextMenu.style.display = 'none';
         });
 
         deleteButton.addEventListener('click', () => {
             if (!targetNodeForMenu) return;
             contextMenu.style.display = 'none';
-
             const nodesToPrune = cy.collection(targetNodeForMenu);
-            let queue = [];
-            let processedIds = new Set();
+            let queue = [], processedIds = new Set();
             queue.push(...targetNodeForMenu.outgoers().nodes());
             processedIds.add(targetNodeForMenu.id());
             while (queue.length > 0) {
                 const currentNode = queue.shift();
                 if (processedIds.has(currentNode.id())) continue;
                 processedIds.add(currentNode.id());
-                const parents = currentNode.incomers().nodes();
-                if (parents.every(p => nodesToPrune.has(p))) {
+                if (currentNode.incomers().nodes().every(p => nodesToPrune.has(p))) {
                     nodesToPrune.merge(currentNode);
                     queue.push(...currentNode.outgoers().nodes());
                 }
             }
-            queue = [];
-            processedIds.clear();
+            queue = [], processedIds.clear();
             queue.push(...targetNodeForMenu.incomers().nodes());
             processedIds.add(targetNodeForMenu.id());
             while (queue.length > 0) {
                 const currentNode = queue.shift();
                 if (processedIds.has(currentNode.id())) continue;
                 processedIds.add(currentNode.id());
-                const children = currentNode.outgoers().nodes().filter(c => c.id() !== currentNode.id());
-                if (children.every(c => nodesToPrune.has(c))) {
+                if (currentNode.outgoers().nodes().filter(c => c.id() !== currentNode.id()).every(c => nodesToPrune.has(c))) {
                     nodesToPrune.merge(currentNode);
                     queue.push(...currentNode.incomers().nodes());
                 }
             }
-
-            if (nodesToPrune.length > 0) {
-                cy.remove(nodesToPrune);
-            }
-
-            // [优化] 执行删除操作后，重置所有高亮状态
+            if (nodesToPrune.length > 0) cy.remove(nodesToPrune);
             resetHighlight();
             targetNodeForMenu = null;
+            lastSelectedNode = null;
         });
 
-        cy.on('tap', 'node', (evt) => highlightElements(evt.target.union(evt.target.predecessors()).union(evt.target.successors())));
+        // --- [新功能] 键盘快捷键监听 ---
+        document.addEventListener('keydown', (event) => {
+            // 检查是否按下了 Cmd/Ctrl + C
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
+                if (lastSelectedNode) {
+                    event.preventDefault(); // 阻止浏览器默认的复制行为
+                    copyNodeInfo(lastSelectedNode);
+                }
+            }
+        });
+
+        // --- 其他UI事件 ---
         document.getElementById('reset-button').addEventListener('click', () => { resetHighlight(); document.getElementById('search-input').value = ''; cy.fit(null, 50); });
         document.getElementById('layout-select').addEventListener('change', function () { cy.layout({ name: this.value, rankDir: 'LR', animate: true, spacingFactor: 1.5 }).run(); });
 
