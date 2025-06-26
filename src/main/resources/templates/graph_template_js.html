@@ -41,7 +41,7 @@
         button:hover { background-color: #0069d9; }
         #reset-button { background-color: #6c757d; border-color: #6c757d; }
         #reset-button:hover { background-color: #5a6268; }
-        #help-button { background-color: #fff400; color: #212529; border-color: #e0a800; } /* [新功能] 帮助按钮样式 */
+        #help-button { background-color: #fff400; color: #212529; border-color: #e0a800; }
         #help-button:hover { background-color: #fff400; }
 
         .node-card {
@@ -74,7 +74,6 @@
         .context-menu ul li:hover { background-color: #007bff; color: white; }
         .context-menu ul li .icon { margin-right: 10px; font-size: 16px; }
 
-        /* [新功能] 帮助弹框样式 */
         .modal-overlay {
             display: none; position: fixed; top: 0; left: 0;
             width: 100%; height: 100%;
@@ -102,7 +101,16 @@
             font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
             font-size: 0.9em; color: #333;
         }
-
+        /* [优化] 用于颜色块的样式 */
+        .color-swatch {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 3px;
+            vertical-align: middle;
+            margin-right: 8px;
+            border: 1px solid rgba(0,0,0,0.1);
+        }
     </style>
 </head>
 <body>
@@ -113,10 +121,10 @@
         <label for="layout-select">布局:</label>
         <select id="layout-select"><option value="dagre" selected>Dagre (Tree)</option><option value="breadthfirst">Breadthfirst</option><option value="circle">Circle</option><option value="grid">Grid</option></select>
     </div>
-<!--    <div class="control-group">-->
-<!--        <label for="search-input">查询:</label>-->
-<!--        <input type="text" id="search-input" placeholder="查询类或方法...">-->
-<!--    </div>-->
+    <div class="control-group">
+        <label for="search-input">查询:</label>
+        <input type="text" id="search-input" placeholder="查询类或方法...">
+    </div>
     <button id="reset-button">重置</button>
 </div>
 
@@ -129,7 +137,7 @@
     </ul>
 </div>
 
-<!-- [新功能] 帮助弹框 HTML 结构 -->
+<!-- [优化] 更新帮助弹框的 HTML 内容 -->
 <div id="help-modal" class="modal-overlay">
     <div class="modal-content">
         <span class="modal-close-btn">×</span>
@@ -139,6 +147,13 @@
                 <ul>
                     <li>使用鼠标滚轮进行缩放。</li>
                     <li>按住并拖动画布空白处进行平移。</li>
+                </ul>
+            </li>
+            <li><strong>节点颜色说明:</strong>
+                <ul>
+                    <li><span class="color-swatch" style="background-color: #eceff1; border-left: 5px solid #b0bec5;"></span><strong>灰色 (Root):</strong> 调用链的<b>顶端</b>。在当前图中，它只被调用，不调用任何其他节点。</li>
+                    <li><span class="color-swatch" style="background-color: #e3f2fd; border-left: 5px solid #42a5f5;"></span><strong>蓝色 (Intermediate):</strong> 调用链的<b>中间节点</b>。它既调用其他方法，也被其他方法调用，是关系图的枢纽。</li>
+                    <li><span class="color-swatch" style="background-color: #e8f5e9; border-left: 5px solid #66bb6a;"></span><strong>绿色 (Leaf):</strong> 调用链的<b>末端</b>。在当前图中，它只发起调用，而不被任何节点调用，是分析的起点。</li>
                 </ul>
             </li>
             <li><strong>高亮调用链:</strong>
@@ -163,13 +178,6 @@
                 <ul>
                     <li>点击画布任意空白处，可清除所有高亮状态。</li>
                     <li>点击顶部的“重置”按钮，可清除高亮、清空搜索并使视图居中。</li>
-                </ul>
-            </li>
-            <li><strong>关闭弹框:</strong>
-                <ul>
-                    <li>点击此弹框右上角的 <span style="font-size:1.2em; vertical-align:middle;">×</span> 按钮。</li>
-                    <li>点击弹框外的灰色区域。</li>
-                    <li>按 <kbd>ESC</kbd> 键。</li>
                 </ul>
             </li>
         </ul>
@@ -280,6 +288,9 @@
         const contextMenu = document.getElementById('context-menu');
         const deleteButton = document.getElementById('delete-node-btn');
         const copyButton = document.getElementById('copy-node-info-btn');
+        const helpButton = document.getElementById('help-button');
+        const helpModal = document.getElementById('help-modal');
+        const modalCloseBtn = helpModal.querySelector('.modal-close-btn');
         let targetNodeForMenu = null;
         let lastSelectedNode = null;
 
@@ -315,25 +326,15 @@
             deleteNodeAndPruneChain(targetNodeForMenu);
         });
 
-        // --- [新功能] 帮助弹框逻辑 ---
-        const helpButton = document.getElementById('help-button');
-        const helpModal = document.getElementById('help-modal');
-        const modalCloseBtn = helpModal.querySelector('.modal-close-btn');
-
         function openModal() { helpModal.style.display = 'flex'; }
         function closeModal() { helpModal.style.display = 'none'; }
-
         helpButton.addEventListener('click', openModal);
         modalCloseBtn.addEventListener('click', closeModal);
-        helpModal.addEventListener('click', (event) => {
-            if (event.target === helpModal) { // 点击灰色遮罩层时关闭
-                closeModal();
-            }
-        });
+        helpModal.addEventListener('click', (event) => { if (event.target === helpModal) closeModal(); });
 
         document.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') {
-                closeModal();
+                if(helpModal.style.display === 'flex') closeModal();
             }
             if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
                 if (lastSelectedNode) { event.preventDefault(); copyNodeInfo(lastSelectedNode); }
