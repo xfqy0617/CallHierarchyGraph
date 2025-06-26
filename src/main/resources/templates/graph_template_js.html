@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <title>Call Hierarchy Graph</title>
-    <!-- [核心修复] 将 jQuery 移到 head 中，确保它最先加载 -->
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <!-- [核心修复] 将 jQuery 移到 head 中，并使用可靠的 CDN，确保它最先加载 -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
 
     <!-- 依赖库 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
@@ -51,7 +51,7 @@
         #reset-button { background-color: #6c757d; border-color: #6c757d; }
         #reset-button:hover { background-color: #5a6268; }
 
-        /* --- Node Card & Interaction Styling --- */
+        /* --- Node Card & Interaction Styling (关键样式) --- */
         .node-card {
             font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
             border: 1px solid rgba(0,0,0,0.1);
@@ -60,7 +60,7 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.05);
             width: 300px;
             user-select: text;
-            pointer-events: none;
+            pointer-events: none; /* 让点击事件可以穿透到cytoscape画布 */
             text-align: left;
             transition: opacity 0.4s ease, filter 0.4s ease, transform 0.3s ease, box-shadow 0.3s ease;
         }
@@ -72,29 +72,18 @@
             text-overflow: ellipsis;
             margin-bottom: 6px;
         }
-        .node-method-name {
-            font-size: 13px;
-            font-weight: 600;
-            color: #00529b;
-            margin-bottom: 4px;
-        }
-        .node-params, .node-package-name {
-            font-size: 11px;
-            color: #6c757d;
-            line-height: 1.3;
-        }
-        .node-package-name {
-            margin-top: 6px;
-            border-top: 1px dashed #eee;
-            padding-top: 4px;
-        }
+        .node-method-name { font-size: 13px; font-weight: 600; color: #00529b; margin-bottom: 4px; }
+        .node-params, .node-package-name { font-size: 11px; color: #6c757d; line-height: 1.3; }
+        .node-package-name { margin-top: 6px; border-top: 1px dashed #eee; padding-top: 4px; }
 
+        /* 黯淡状态 */
         .node-card.dimmed {
-            opacity: 0.1;
-            filter: grayscale(100%);
+            opacity: 0.15;
+            filter: grayscale(80%);
         }
+        /* 高亮状态 */
         .node-card.highlighted {
-            opacity: 1 !important;
+            opacity: 1 !important; /* 使用 !important 确保覆盖黯淡样式 */
             filter: none !important;
             transform: scale(1.02);
             box-shadow: 0 5px 20px rgba(0, 123, 255, 0.4);
@@ -123,9 +112,12 @@
 <div id="cy"></div>
 
 <script>
-    // 由于 jQuery 已在 head 中加载，这里的代码可以安全地使用 $
+    // 注册插件
     if(typeof cytoscapeNodeHtmlLabel === 'function'){
         cytoscape.use(cytoscapeNodeHtmlLabel);
+    }
+    if(typeof cytoscapeDagre === 'function'){
+        cytoscape.use(cytoscapeDagre);
     }
 
     document.addEventListener('DOMContentLoaded', function () {
@@ -160,6 +152,7 @@
                         'transition-duration': '0.3s'
                     }
                 },
+                // [交互样式] 为Cytoscape的边元素定义高亮和黯淡状态
                 {
                     selector: 'edge.highlighted',
                     style: {
@@ -181,18 +174,9 @@
                 tpl: function(data) {
                     let borderStyle = '', bgColor = '';
                     switch(data.nodeType) {
-                        case 'ROOT':
-                            borderStyle = 'border-left: 5px solid #b0bec5;';
-                            bgColor = '#eceff1';
-                            break;
-                        case 'LEAF':
-                            borderStyle = 'border-left: 5px solid #66bb6a;';
-                            bgColor = '#e8f5e9';
-                            break;
-                        default: // INTERMEDIATE
-                            borderStyle = 'border-left: 5px solid #42a5f5;';
-                            bgColor = '#e3f2fd';
-                            break;
+                        case 'ROOT': borderStyle = 'border-left: 5px solid #b0bec5;'; bgColor = '#eceff1'; break;
+                        case 'LEAF': borderStyle = 'border-left: 5px solid #66bb6a;'; bgColor = '#e8f5e9'; break;
+                        default: borderStyle = 'border-left: 5px solid #42a5f5;'; bgColor = '#e3f2fd'; break;
                     }
                     const finalStyle = `${borderStyle} background-color: ${bgColor};`;
                     return `
@@ -211,42 +195,51 @@
         function highlightElements(elementsToShow) {
             document.body.classList.add('highlight-active');
 
-            // 黯淡所有元素
-            cy.elements().addClass('dimmed');
+            // 1. 黯淡所有元素 (Cytoscape边 + HTML节点卡片)
+            cy.edges().addClass('dimmed');
             $('.node-card').addClass('dimmed').removeClass('highlighted');
 
-            // 高亮选中的路径
-            elementsToShow.removeClass('dimmed').addClass('highlighted');
-
+            // 2. 高亮选中的路径 (Cytoscape边 + HTML节点卡片)
+            elementsToShow.edges().removeClass('dimmed').addClass('highlighted');
             elementsToShow.nodes().forEach(node => {
+                // 使用 jQuery 安全地操作对应的 HTML 卡片
                 $(`#card-${node.id()}`).removeClass('dimmed').addClass('highlighted');
             });
         }
 
         function resetHighlight() {
             document.body.classList.remove('highlight-active');
+            // 移除所有 Cytoscape 元素和 HTML 卡片的交互样式
             cy.elements().removeClass('dimmed highlighted');
             $('.node-card').removeClass('dimmed highlighted');
         }
 
+        // --- 事件监听 ---
+
+        // 点击节点时，高亮其所有上游和下游调用链
         cy.on('tap', 'node', (evt) => {
             const node = evt.target;
+            // successors() 是下游调用，predecessors() 是上游调用
             const path = node.union(node.predecessors()).union(node.successors());
             highlightElements(path);
         });
 
+        // 点击画布空白处，重置高亮
         cy.on('tap', (evt) => { if (evt.target === cy) resetHighlight(); });
 
+        // 点击重置按钮
         document.getElementById('reset-button').addEventListener('click', () => {
             resetHighlight();
             document.getElementById('search-input').value = '';
-            cy.fit(null, 50);
+            cy.fit(null, 50); // 视图居中并缩放以适应所有元素
         });
 
+        // 切换布局
         document.getElementById('layout-select').addEventListener('change', function () {
             cy.layout({ name: this.value, rankDir: 'LR', animate: true, spacingFactor: 1.5 }).run();
         });
 
+        // 搜索功能 (带延迟以优化性能)
         let timeout;
         document.getElementById('search-input').addEventListener('input', function() {
             const query = this.value.toLowerCase().trim();
@@ -262,12 +255,16 @@
                 );
 
                 if (searchResults.length > 0) {
-                    highlightElements(searchResults);
+                    // 这里我们只高亮匹配的节点本身，而不是整个调用链
+                    document.body.classList.add('highlight-active');
+                    cy.edges().addClass('dimmed');
+                    $('.node-card').addClass('dimmed').removeClass('highlighted');
+                    searchResults.forEach(node => {
+                        $(`#card-${node.id()}`).removeClass('dimmed').addClass('highlighted');
+                    });
                 }
             }, 300);
         });
-
-        // jQuery的加载标签已移至head，此处无需再添加
     });
 </script>
 </body>
