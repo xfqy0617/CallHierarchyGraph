@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Call Hierarchy Graph</title>
+    <!-- 引入必要的库: jQuery用于简化DOM操作, Cytoscape核心库, Dagre用于树状布局, 以及Cytoscape的相关插件 -->
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.23.0/cytoscape.min.js"></script>
     <script src="https://unpkg.com/dagre@0.8.5/dist/dagre.min.js"></script>
@@ -10,6 +11,7 @@
     <script src="https://unpkg.com/cytoscape-node-html-label@1.2.0/dist/cytoscape-node-html-label.min.js"></script>
 
     <style>
+        /* CSS样式部分保持不变，因为其类名已经具有足够的自解释性 */
         body, html {
             margin: 0; padding: 0; height: 100%;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -41,8 +43,8 @@
         button:hover { background-color: #0069d9; }
         #reset-button { background-color: #6c757d; border-color: #6c757d; }
         #reset-button:hover { background-color: #5a6268; }
-        #help-button { background-color: #fff400; color: #212529; border-color: #e0a800; }
-        #help-button:hover { background-color: #fff400; }
+        #help-button { background-color: #ffc107; color: #212529; border-color: #e0a800; }
+        #help-button:hover { background-color: #e0a800; }
 
         .node-card {
             font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
@@ -101,7 +103,6 @@
             font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
             font-size: 0.9em; color: #333;
         }
-        /* [优化] 用于颜色块的样式 */
         .color-swatch {
             display: inline-block;
             width: 12px;
@@ -137,7 +138,6 @@
     </ul>
 </div>
 
-<!-- [优化] 更新帮助弹框的 HTML 内容 -->
 <div id="help-modal" class="modal-overlay">
     <div class="modal-content">
         <span class="modal-close-btn">×</span>
@@ -185,36 +185,57 @@
 </div>
 
 <script>
+    // 确保 Cytoscape 插件已正确加载
     if(typeof cytoscapeNodeHtmlLabel === 'function') cytoscape.use(cytoscapeNodeHtmlLabel);
     if(typeof cytoscapeDagre === 'function') cytoscape.use(cytoscapeDagre);
 
+    // 待文档加载完毕后，执行图表初始化和事件绑定
     document.addEventListener('DOMContentLoaded', function () {
+
+        // =========================================================================
+        // === 1. 图表初始化 (Initialization)
+        // =========================================================================
+
+        // 从占位符获取由后端注入的JSON数据
         const graphData = '{graph_data_placeholder}';
         if (!graphData || !graphData.nodes || !graphData.edges) {
             console.error("Graph data is missing or invalid.");
-            document.getElementById('cy').innerText = "Error: Could not load graph data.";
+            document.getElementById('cy').innerText = "错误：无法加载图表数据。";
             return;
         }
 
+        // 创建 Cytoscape 实例，这是所有可视化操作的核心
         const cy = cytoscape({
-            container: document.getElementById('cy'),
+            container: document.getElementById('cy'), // 绑定到画布DOM元素
+
+            // 定义图的元素（节点和边）
             elements: {
                 nodes: graphData.nodes.map(node => ({ data: { id: node.id, ...node } })),
                 edges: graphData.edges.map(edge => ({ data: { id: `edge_${edge.source}_${edge.target}`, source: edge.source, target: edge.target } }))
             },
+
+            // 定义全局样式
             style: [
+                // 节点默认透明，因为我们将使用HTML模板来渲染其外观
                 { selector: 'node', style: { 'background-opacity': 0, 'border-width': 0, 'width': 320, 'height': 110, 'shape': 'rectangle' }},
+                // 边的默认样式
                 { selector: 'edge', style: { 'width': 2, 'line-color': '#adb5bd', 'target-arrow-color': '#adb5bd', 'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'transition-property': 'line-color, target-arrow-color, width, opacity', 'transition-duration': '0.3s' }},
+                // 高亮状态的边
                 { selector: 'edge.highlighted', style: { 'line-color': '#007bff', 'target-arrow-color': '#007bff', 'width': 3.5, 'opacity': 1, 'z-index': 100 }},
+                // 虚化状态的边
                 { selector: 'edge.dimmed', style: { 'opacity': 0.1 }}
             ],
+
+            // 指定初始布局算法
             layout: { name: 'dagre', rankDir: 'LR', spacingFactor: 1.5 }
         });
 
+        // 使用 node-html-label 插件，将每个节点的数据动态渲染成一个HTML信息卡片
         cy.nodeHtmlLabel([
             {
                 query: 'node', valign: "center", halign: "center",
                 tpl: (data) => {
+                    // 根据后端传来的 nodeType (ROOT, LEAF, INTERMEDIATE) 设置不同的背景和边框颜色，以在视觉上区分节点类型
                     let borderStyle = '', bgColor = '';
                     switch(data.nodeType) {
                         case 'ROOT': borderStyle = 'border-left: 5px solid #b0bec5;'; bgColor = '#eceff1'; break;
@@ -222,11 +243,21 @@
                         default: borderStyle = 'border-left: 5px solid #42a5f5;'; bgColor = '#e3f2fd'; break;
                     }
                     const finalStyle = `${borderStyle} background-color: ${bgColor};`;
+                    // 返回最终的HTML字符串模板
                     return `<div id="card-${data.id}" class="node-card" style="${finalStyle}"><div class="copy-feedback">Copied!</div><div class="node-class-name" style="color: ${data.classColor};" title="${data.className}">${data.className}</div><div class="node-method-name" title="${data.methodName}">${data.methodName}</div><div class="node-params" title="${data.params}">(${data.params})</div><div class="node-package-name" title="${data.packageName}">${data.packageName}</div></div>`;
                 }
             }
         ]);
 
+
+        // =========================================================================
+        // === 2. 核心交互函数 (Core Interaction Functions)
+        // =========================================================================
+
+        /**
+         * 高亮指定的元素集合，并虚化其他所有元素。
+         * @param {Collection} elementsToShow - 需要高亮的Cytoscape元素集合。
+         */
         function highlightElements(elementsToShow) {
             document.body.classList.add('highlight-active');
             cy.edges().addClass('dimmed');
@@ -235,12 +266,19 @@
             elementsToShow.nodes().forEach(node => $(`#card-${node.id()}`).removeClass('dimmed').addClass('highlighted'));
         }
 
+        /**
+         * 清除所有高亮和虚化效果，恢复图表的默认状态。
+         */
         function resetHighlight() {
             document.body.classList.remove('highlight-active');
             cy.elements().removeClass('dimmed highlighted');
             $('.node-card').removeClass('dimmed highlighted');
         }
 
+        /**
+         * 将指定节点的关键信息复制到用户剪贴板，并提供视觉反馈。
+         * @param {NodeSingular} node - 要复制信息的节点。
+         */
         function copyNodeInfo(node) {
             if (!node) return;
             const data = node.data();
@@ -248,52 +286,83 @@
             navigator.clipboard.writeText(textToCopy).then(() => {
                 const card = $(`#card-${node.id()}`);
                 card.addClass('copied');
-                setTimeout(() => card.removeClass('copied'), 1500);
-            }).catch(err => console.error('Failed to copy text:', err));
+                setTimeout(() => card.removeClass('copied'), 1500); // 1.5秒后移除复制成功状态
+            }).catch(err => console.error('复制失败:', err));
         }
 
+        /**
+         * [核心算法] 迭代式删除节点并修剪所有关联的孤立调用链。
+         *
+         * 设计思路:
+         * 这是一个迭代收敛算法，旨在解决复杂依赖关系下的修剪问题（例如，一个节点有多个待删除的父节点）。
+         * 算法会反复扫描全图，直到在一轮完整的扫描中再也找不到任何可以被修剪的“孤立”节点为止。
+         * 只有当图的结构稳定后，才执行最终的删除操作。
+         *
+         * @param {NodeSingular} nodeToDelete - 用户最初选择要删除的节点。
+         */
         function deleteNodeAndPruneChain(nodeToDelete) {
-            if (!nodeToDelete) return;
+            if (!nodeToDelete || nodeToDelete.removed()) return;
+
+            // 初始化待删除节点的集合，首先包含用户点击的节点
             const nodesToPrune = cy.collection(nodeToDelete);
-            let queue = [], processedIds = new Set();
-            queue.push(...nodeToDelete.outgoers().nodes());
-            processedIds.add(nodeToDelete.id());
-            while (queue.length > 0) {
-                const currentNode = queue.shift();
-                if (processedIds.has(currentNode.id())) continue;
-                processedIds.add(currentNode.id());
-                if (currentNode.incomers().nodes().every(p => nodesToPrune.has(p))) {
-                    nodesToPrune.merge(currentNode);
-                    queue.push(...currentNode.outgoers().nodes());
-                }
+            let nodesAddedInLastPass;
+
+            // 开始迭代过程。只要上一轮迭代有收获（即有新节点被加入待删除列表），就继续循环。
+            do {
+                nodesAddedInLastPass = 0;
+
+                // 在每一轮迭代中，遍历图中的所有节点
+                cy.nodes().forEach(currentNode => {
+                    // 如果节点已在待删除列表，则跳过，避免重复计算
+                    if (nodesToPrune.has(currentNode)) {
+                        return;
+                    }
+
+                    const parents = currentNode.incomers().nodes();
+                    const children = currentNode.outgoers().nodes();
+
+                    // 判断条件1：上游孤立。
+                    // 如果一个节点存在父节点，且它所有的父节点都已经被标记为待删除，那么这个节点也应该被删除。
+                    if (parents.length > 0 && parents.every(p => nodesToPrune.has(p))) {
+                        nodesToPrune.merge(currentNode);
+                        nodesAddedInLastPass++;
+                        return; // 已处理，进入下一个节点的遍历
+                    }
+
+                    // 判断条件2：下游孤立。
+                    // 如果一个节点存在子节点，且它所有的子节点都已经被标记为待删除，那么这个节点本身也失去了存在的意义，也应该被删除。
+                    if (children.length > 0 && children.every(c => nodesToPrune.has(c))) {
+                        nodesToPrune.merge(currentNode);
+                        nodesAddedInLastPass++;
+                    }
+                });
+
+            } while (nodesAddedInLastPass > 0); // 当一轮循环下来没有任何新节点被添加，说明已收敛，循环结束。
+
+            // 迭代收敛后，一次性从图中移除所有被标记的节点和相关的边
+            if (nodesToPrune.length > 0) {
+                cy.remove(nodesToPrune);
             }
-            queue = [], processedIds.clear();
-            queue.push(...nodeToDelete.incomers().nodes());
-            processedIds.add(nodeToDelete.id());
-            while (queue.length > 0) {
-                const currentNode = queue.shift();
-                if (processedIds.has(currentNode.id())) continue;
-                processedIds.add(currentNode.id());
-                if (currentNode.outgoers().nodes().filter(c => c.id() !== currentNode.id()).every(c => nodesToPrune.has(c))) {
-                    nodesToPrune.merge(currentNode);
-                    queue.push(...currentNode.incomers().nodes());
-                }
-            }
-            if (nodesToPrune.length > 0) cy.remove(nodesToPrune);
+
+            // 清理UI状态
             resetHighlight();
             targetNodeForMenu = null;
             lastSelectedNode = null;
         }
 
-        const contextMenu = document.getElementById('context-menu');
-        const deleteButton = document.getElementById('delete-node-btn');
-        const copyButton = document.getElementById('copy-node-info-btn');
-        const helpButton = document.getElementById('help-button');
-        const helpModal = document.getElementById('help-modal');
-        const modalCloseBtn = helpModal.querySelector('.modal-close-btn');
-        let targetNodeForMenu = null;
-        let lastSelectedNode = null;
 
+        // =========================================================================
+        // === 3. 事件绑定 (Event Handling)
+        // =========================================================================
+
+        // --- 全局变量，用于存储上下文状态 ---
+        const contextMenu = document.getElementById('context-menu');
+        const helpModal = document.getElementById('help-modal');
+        let targetNodeForMenu = null; // 存储右键点击的节点
+        let lastSelectedNode = null;  // 存储最后左键单击的节点
+
+        // --- Cytoscape 画布事件 ---
+        // 响应节点右键点击，在鼠标位置显示上下文菜单
         cy.on('cxttap', 'node', (evt) => {
             evt.preventDefault();
             targetNodeForMenu = evt.target;
@@ -302,6 +371,14 @@
             contextMenu.style.display = 'block';
         });
 
+        // 响应节点左键单击，高亮其完整的上下游调用链
+        cy.on('tap', 'node', (evt) => {
+            const node = evt.target;
+            lastSelectedNode = node;
+            highlightElements(node.union(node.predecessors()).union(node.successors()));
+        });
+
+        // 响应画布空白区域的点击，用于隐藏菜单和清除高亮
         cy.on('tap', (evt) => {
             if (evt.target === cy) {
                 contextMenu.style.display = 'none';
@@ -310,45 +387,27 @@
             }
         });
 
-        cy.on('tap', 'node', (evt) => {
-            const node = evt.target;
-            lastSelectedNode = node;
-            highlightElements(node.union(node.predecessors()).union(node.successors()));
-        });
-
-        copyButton.addEventListener('click', () => {
+        // --- UI控件事件 ---
+        // 上下文菜单中的“复制”和“删除”按钮
+        document.getElementById('copy-node-info-btn').addEventListener('click', () => {
             contextMenu.style.display = 'none';
             copyNodeInfo(targetNodeForMenu);
         });
-
-        deleteButton.addEventListener('click', () => {
+        document.getElementById('delete-node-btn').addEventListener('click', () => {
             contextMenu.style.display = 'none';
             deleteNodeAndPruneChain(targetNodeForMenu);
         });
 
-        function openModal() { helpModal.style.display = 'flex'; }
-        function closeModal() { helpModal.style.display = 'none'; }
-        helpButton.addEventListener('click', openModal);
-        modalCloseBtn.addEventListener('click', closeModal);
-        helpModal.addEventListener('click', (event) => { if (event.target === helpModal) closeModal(); });
+        // 帮助弹窗的显示与隐藏逻辑
+        document.getElementById('help-button').addEventListener('click', () => { helpModal.style.display = 'flex'; });
+        helpModal.querySelector('.modal-close-btn').addEventListener('click', () => { helpModal.style.display = 'none'; });
+        helpModal.addEventListener('click', (event) => { if (event.target === helpModal) helpModal.style.display = 'none'; });
 
-        document.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') {
-                if(helpModal.style.display === 'flex') closeModal();
-            }
-            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
-                if (lastSelectedNode) { event.preventDefault(); copyNodeInfo(lastSelectedNode); }
-            }
-            const isDeleteKey = event.key === 'Delete';
-            const isMacDelete = event.metaKey && event.key === 'Backspace';
-            if (isDeleteKey || isMacDelete) {
-                if (lastSelectedNode) { event.preventDefault(); deleteNodeAndPruneChain(lastSelectedNode); }
-            }
-        });
-
+        // 顶部控制栏的按钮和下拉框
         document.getElementById('reset-button').addEventListener('click', () => { resetHighlight(); document.getElementById('search-input').value = ''; cy.fit(null, 50); });
         document.getElementById('layout-select').addEventListener('change', function () { cy.layout({ name: this.value, rankDir: 'LR', animate: true, spacingFactor: 1.5 }).run(); });
 
+        // 搜索框输入事件，带有300毫秒的防抖（debounce）处理，避免频繁触发搜索
         let timeout;
         document.getElementById('search-input').addEventListener('input', function() {
             const query = this.value.toLowerCase().trim();
@@ -356,14 +415,36 @@
             timeout = setTimeout(() => {
                 resetHighlight();
                 if (!query) return;
-                const searchResults = cy.nodes().filter(node => node.data('className').toLowerCase().includes(query) || node.data('methodName').toLowerCase().includes(query) || node.data('packageName').toLowerCase().includes(query));
+                const searchResults = cy.nodes().filter(node =>
+                    node.data('className').toLowerCase().includes(query) ||
+                    node.data('methodName').toLowerCase().includes(query) ||
+                    node.data('packageName').toLowerCase().includes(query)
+                );
                 if (searchResults.length > 0) {
-                    document.body.classList.add('highlight-active');
-                    cy.edges().addClass('dimmed');
-                    $('.node-card').addClass('dimmed').removeClass('highlighted');
-                    searchResults.forEach(node => $(`#card-${node.id()}`).removeClass('dimmed').addClass('highlighted'));
+                    highlightElements(searchResults);
                 }
             }, 300);
+        });
+
+        // --- 全局键盘快捷键 ---
+        document.addEventListener('keydown', (event) => {
+            // Esc键：关闭帮助弹窗
+            if (event.key === 'Escape' && helpModal.style.display === 'flex') {
+                helpModal.style.display = 'none';
+            }
+
+            // Cmd/Ctrl + C：复制选中节点的信息
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
+                if (lastSelectedNode) { event.preventDefault(); copyNodeInfo(lastSelectedNode); }
+            }
+
+            // Delete / Cmd + Backspace：删除选中节点并修剪链路
+            const isDeleteKey = event.key === 'Delete';
+            const isMacDelete = event.metaKey && event.key === 'Backspace';
+            // 确保焦点不在输入框内，以防误删
+            if ((isDeleteKey || isMacDelete) && document.activeElement.tagName !== 'INPUT') {
+                if (lastSelectedNode) { event.preventDefault(); deleteNodeAndPruneChain(lastSelectedNode); }
+            }
         });
     });
 </script>
