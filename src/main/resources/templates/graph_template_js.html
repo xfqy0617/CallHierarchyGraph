@@ -57,7 +57,6 @@
         .node-card.dimmed { opacity: 0.15; filter: grayscale(80%); }
         .node-card.highlighted { opacity: 1 !important; filter: none !important; transform: scale(1.02); box-shadow: 0 5px 20px rgba(0, 123, 255, 0.4); }
 
-        /* [新功能] 复制成功后的反馈样式 */
         .node-card.copied { border-color: #28a745; }
         .copy-feedback {
             display: none;
@@ -86,11 +85,7 @@
 <div class="controls">
     <div class="control-group">
         <label for="layout-select">布局:</label>
-        <select id="layout-select">
-            <option value="dagre" selected>Dagre (Tree)</option>
-            <option value="breadthfirst">Breadthfirst</option>
-            <option value="circle">Circle</option>
-            <option value="grid">Grid</option></select>
+        <select id="layout-select"><option value="dagre" selected>Dagre (Tree)</option><option value="breadthfirst">Breadthfirst</option><option value="circle">Circle</option><option value="grid">Grid</option></select>
     </div>
     <div class="control-group">
         <label for="search-input">查询:</label>
@@ -101,7 +96,6 @@
 
 <div id="cy"></div>
 
-<!-- [新功能] 更新右键菜单 HTML -->
 <div id="context-menu" class="context-menu">
     <ul>
         <li id="copy-node-info-btn"><span class="icon">📋</span>复制</li>
@@ -147,13 +141,7 @@
                         default: borderStyle = 'border-left: 5px solid #42a5f5;'; bgColor = '#e3f2fd'; break;
                     }
                     const finalStyle = `${borderStyle} background-color: ${bgColor};`;
-                    return `<div id="card-${data.id}" class="node-card" style="${finalStyle}">
-                                <div class="copy-feedback">Copied!</div>
-                                <div class="node-class-name" style="color: ${data.classColor};" title="${data.className}">${data.className}</div>
-                                <div class="node-method-name" title="${data.methodName}">${data.methodName}</div>
-                                <div class="node-params" title="${data.params}">(${data.params})</div>
-                                <div class="node-package-name" title="${data.packageName}">${data.packageName}</div>
-                            </div>`;
+                    return `<div id="card-${data.id}" class="node-card" style="${finalStyle}"><div class="copy-feedback">Copied!</div><div class="node-class-name" style="color: ${data.classColor};" title="${data.className}">${data.className}</div><div class="node-method-name" title="${data.methodName}">${data.methodName}</div><div class="node-params" title="${data.params}">(${data.params})</div><div class="node-package-name" title="${data.packageName}">${data.packageName}</div></div>`;
                 }
             }
         ]);
@@ -172,28 +160,58 @@
             $('.node-card').removeClass('dimmed highlighted');
         }
 
-        // --- [新功能] 复制逻辑 ---
         function copyNodeInfo(node) {
             if (!node) return;
             const data = node.data();
             const textToCopy = `${data.packageName}.${data.className}#${data.methodName}`;
-
             navigator.clipboard.writeText(textToCopy).then(() => {
-                console.log('Copied:', textToCopy);
                 const card = $(`#card-${node.id()}`);
                 card.addClass('copied');
-                setTimeout(() => card.removeClass('copied'), 1500); // 1.5秒后移除反馈
-            }).catch(err => {
-                console.error('Failed to copy text:', err);
-                alert('Failed to copy text. See console for details.');
-            });
+                setTimeout(() => card.removeClass('copied'), 1500);
+            }).catch(err => console.error('Failed to copy text:', err));
+        }
+
+        // --- [重构] 将核心删除逻辑封装成独立函数 ---
+        function deleteNodeAndPruneChain(nodeToDelete) {
+            if (!nodeToDelete) return;
+
+            const nodesToPrune = cy.collection(nodeToDelete);
+            let queue = [], processedIds = new Set();
+            queue.push(...nodeToDelete.outgoers().nodes());
+            processedIds.add(nodeToDelete.id());
+            while (queue.length > 0) {
+                const currentNode = queue.shift();
+                if (processedIds.has(currentNode.id())) continue;
+                processedIds.add(currentNode.id());
+                if (currentNode.incomers().nodes().every(p => nodesToPrune.has(p))) {
+                    nodesToPrune.merge(currentNode);
+                    queue.push(...currentNode.outgoers().nodes());
+                }
+            }
+            queue = [], processedIds.clear();
+            queue.push(...nodeToDelete.incomers().nodes());
+            processedIds.add(nodeToDelete.id());
+            while (queue.length > 0) {
+                const currentNode = queue.shift();
+                if (processedIds.has(currentNode.id())) continue;
+                processedIds.add(currentNode.id());
+                if (currentNode.outgoers().nodes().filter(c => c.id() !== currentNode.id()).every(c => nodesToPrune.has(c))) {
+                    nodesToPrune.merge(currentNode);
+                    queue.push(...currentNode.incomers().nodes());
+                }
+            }
+            if (nodesToPrune.length > 0) cy.remove(nodesToPrune);
+
+            resetHighlight();
+            targetNodeForMenu = null;
+            lastSelectedNode = null;
         }
 
         const contextMenu = document.getElementById('context-menu');
         const deleteButton = document.getElementById('delete-node-btn');
-        const copyButton = document.getElementById('copy-node-info-btn'); // 新增
+        const copyButton = document.getElementById('copy-node-info-btn');
         let targetNodeForMenu = null;
-        let lastSelectedNode = null; // [优化] 用于键盘快捷键
+        let lastSelectedNode = null;
 
         cy.on('cxttap', 'node', (evt) => {
             evt.preventDefault();
@@ -207,69 +225,49 @@
             if (evt.target === cy) {
                 contextMenu.style.display = 'none';
                 resetHighlight();
-                lastSelectedNode = null; // [优化] 点击空白处，清除选中节点
+                lastSelectedNode = null;
             }
         });
 
-        // [优化] 更新节点点击事件，记录最后选中的节点
         cy.on('tap', 'node', (evt) => {
             const node = evt.target;
-            lastSelectedNode = node; // 记录
+            lastSelectedNode = node;
             highlightElements(node.union(node.predecessors()).union(node.successors()));
         });
 
-        // --- 右键菜单事件监听 ---
         copyButton.addEventListener('click', () => {
+            contextMenu.style.display = 'none';
             copyNodeInfo(targetNodeForMenu);
-            contextMenu.style.display = 'none';
         });
 
+        // --- [重构] 删除按钮的监听器现在只负责调用通用函数 ---
         deleteButton.addEventListener('click', () => {
-            if (!targetNodeForMenu) return;
             contextMenu.style.display = 'none';
-            const nodesToPrune = cy.collection(targetNodeForMenu);
-            let queue = [], processedIds = new Set();
-            queue.push(...targetNodeForMenu.outgoers().nodes());
-            processedIds.add(targetNodeForMenu.id());
-            while (queue.length > 0) {
-                const currentNode = queue.shift();
-                if (processedIds.has(currentNode.id())) continue;
-                processedIds.add(currentNode.id());
-                if (currentNode.incomers().nodes().every(p => nodesToPrune.has(p))) {
-                    nodesToPrune.merge(currentNode);
-                    queue.push(...currentNode.outgoers().nodes());
-                }
-            }
-            queue = [], processedIds.clear();
-            queue.push(...targetNodeForMenu.incomers().nodes());
-            processedIds.add(targetNodeForMenu.id());
-            while (queue.length > 0) {
-                const currentNode = queue.shift();
-                if (processedIds.has(currentNode.id())) continue;
-                processedIds.add(currentNode.id());
-                if (currentNode.outgoers().nodes().filter(c => c.id() !== currentNode.id()).every(c => nodesToPrune.has(c))) {
-                    nodesToPrune.merge(currentNode);
-                    queue.push(...currentNode.incomers().nodes());
-                }
-            }
-            if (nodesToPrune.length > 0) cy.remove(nodesToPrune);
-            resetHighlight();
-            targetNodeForMenu = null;
-            lastSelectedNode = null;
+            deleteNodeAndPruneChain(targetNodeForMenu);
         });
 
-        // --- [新功能] 键盘快捷键监听 ---
+        // --- [新功能] 全局键盘快捷键监听器 ---
         document.addEventListener('keydown', (event) => {
-            // 检查是否按下了 Cmd/Ctrl + C
+            // 复制快捷键
             if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
                 if (lastSelectedNode) {
-                    event.preventDefault(); // 阻止浏览器默认的复制行为
+                    event.preventDefault();
                     copyNodeInfo(lastSelectedNode);
                 }
             }
+
+            // 删除快捷键
+            const isDeleteKey = event.key === 'Delete';
+            const isMacDelete = event.metaKey && event.key === 'Backspace'; // Cmd+Backspace on macOS
+
+            if (isDeleteKey || isMacDelete) {
+                if (lastSelectedNode) {
+                    event.preventDefault(); // 阻止浏览器默认行为 (如 Cmd+Backspace 的后退)
+                    deleteNodeAndPruneChain(lastSelectedNode);
+                }
+            }
         });
 
-        // --- 其他UI事件 ---
         document.getElementById('reset-button').addEventListener('click', () => { resetHighlight(); document.getElementById('search-input').value = ''; cy.fit(null, 50); });
         document.getElementById('layout-select').addEventListener('change', function () { cy.layout({ name: this.value, rankDir: 'LR', animate: true, spacingFactor: 1.5 }).run(); });
 
