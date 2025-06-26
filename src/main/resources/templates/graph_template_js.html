@@ -41,6 +41,8 @@
         button:hover { background-color: #0069d9; }
         #reset-button { background-color: #6c757d; border-color: #6c757d; }
         #reset-button:hover { background-color: #5a6268; }
+        #help-button { background-color: #fff400; color: #212529; border-color: #e0a800; } /* [新功能] 帮助按钮样式 */
+        #help-button:hover { background-color: #fff400; }
 
         .node-card {
             font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
@@ -58,13 +60,7 @@
         .node-card.highlighted { opacity: 1 !important; filter: none !important; transform: scale(1.02); box-shadow: 0 5px 20px rgba(0, 123, 255, 0.4); }
 
         .node-card.copied { border-color: #28a745; }
-        .copy-feedback {
-            display: none;
-            position: absolute; top: 5px; right: 8px;
-            background-color: #28a745; color: white;
-            padding: 2px 6px; border-radius: 4px;
-            font-size: 10px; font-weight: bold;
-        }
+        .copy-feedback { display: none; position: absolute; top: 5px; right: 8px; background-color: #28a745; color: white; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: bold; }
         .node-card.copied .copy-feedback { display: block; }
 
         .context-menu {
@@ -78,11 +74,41 @@
         .context-menu ul li:hover { background-color: #007bff; color: white; }
         .context-menu ul li .icon { margin-right: 10px; font-size: 16px; }
 
+        /* [新功能] 帮助弹框样式 */
+        .modal-overlay {
+            display: none; position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            justify-content: center; align-items: center;
+            z-index: 2000;
+        }
+        .modal-content {
+            background-color: #fff; padding: 25px 35px; border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            position: relative; max-width: 650px;
+            max-height: 80vh; overflow-y: auto;
+        }
+        .modal-close-btn {
+            position: absolute; top: 10px; right: 15px;
+            font-size: 28px; font-weight: bold; color: #aaa;
+            cursor: pointer; transition: color 0.2s;
+        }
+        .modal-close-btn:hover { color: #333; }
+        .modal-content h2 { margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .modal-content ul { padding-left: 20px; line-height: 1.8; }
+        .modal-content kbd {
+            background-color: #f7f7f7; border: 1px solid #ccc; border-radius: 4px;
+            padding: 2px 6px; margin: 0 2px;
+            font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+            font-size: 0.9em; color: #333;
+        }
+
     </style>
 </head>
 <body>
 
 <div class="controls">
+    <button id="help-button">💡 使用须知</button>
     <div class="control-group">
         <label for="layout-select">布局:</label>
         <select id="layout-select"><option value="dagre" selected>Dagre (Tree)</option><option value="breadthfirst">Breadthfirst</option><option value="circle">Circle</option><option value="grid">Grid</option></select>
@@ -101,6 +127,53 @@
         <li id="copy-node-info-btn"><span class="icon">📋</span>复制</li>
         <li id="delete-node-btn"><span class="icon">🗑️</span>删除节点&修剪链路</li>
     </ul>
+</div>
+
+<!-- [新功能] 帮助弹框 HTML 结构 -->
+<div id="help-modal" class="modal-overlay">
+    <div class="modal-content">
+        <span class="modal-close-btn">×</span>
+        <h2>使用须知</h2>
+        <ul>
+            <li><strong>查看与导航:</strong>
+                <ul>
+                    <li>使用鼠标滚轮进行缩放。</li>
+                    <li>按住并拖动画布空白处进行平移。</li>
+                </ul>
+            </li>
+            <li><strong>高亮调用链:</strong>
+                <ul>
+                    <li><strong>左键单击</strong>任意节点，即可高亮其完整的上游和下游调用链。</li>
+                </ul>
+            </li>
+            <li><strong>复制节点信息:</strong>
+                <ul>
+                    <li><strong>左键单击</strong>选中节点后，按 <kbd>Cmd</kbd> + <kbd>C</kbd> (或 <kbd>Ctrl</kbd> + <kbd>C</kbd>)。</li>
+                    <li>或<strong>右键单击</strong>节点，在菜单中选择“复制”。</li>
+                </ul>
+            </li>
+            <li><strong>删除节点与修剪:</strong>
+                <ul>
+                    <li><strong>左键单击</strong>选中节点后，按 <kbd>Delete</kbd> 键 (或 <kbd>Cmd</kbd> + <kbd>Backspace</kbd>)。</li>
+                    <li>或<strong>右键单击</strong>节点，在菜单中选择“删除节点&修剪链路”。</li>
+                    <li>该操作会自动移除所有仅与被删除链路相关的“孤立”节点。</li>
+                </ul>
+            </li>
+            <li><strong>重置视图:</strong>
+                <ul>
+                    <li>点击画布任意空白处，可清除所有高亮状态。</li>
+                    <li>点击顶部的“重置”按钮，可清除高亮、清空搜索并使视图居中。</li>
+                </ul>
+            </li>
+            <li><strong>关闭弹框:</strong>
+                <ul>
+                    <li>点击此弹框右上角的 <span style="font-size:1.2em; vertical-align:middle;">×</span> 按钮。</li>
+                    <li>点击弹框外的灰色区域。</li>
+                    <li>按 <kbd>ESC</kbd> 键。</li>
+                </ul>
+            </li>
+        </ul>
+    </div>
 </div>
 
 <script>
@@ -171,10 +244,8 @@
             }).catch(err => console.error('Failed to copy text:', err));
         }
 
-        // --- [重构] 将核心删除逻辑封装成独立函数 ---
         function deleteNodeAndPruneChain(nodeToDelete) {
             if (!nodeToDelete) return;
-
             const nodesToPrune = cy.collection(nodeToDelete);
             let queue = [], processedIds = new Set();
             queue.push(...nodeToDelete.outgoers().nodes());
@@ -201,7 +272,6 @@
                 }
             }
             if (nodesToPrune.length > 0) cy.remove(nodesToPrune);
-
             resetHighlight();
             targetNodeForMenu = null;
             lastSelectedNode = null;
@@ -240,31 +310,38 @@
             copyNodeInfo(targetNodeForMenu);
         });
 
-        // --- [重构] 删除按钮的监听器现在只负责调用通用函数 ---
         deleteButton.addEventListener('click', () => {
             contextMenu.style.display = 'none';
             deleteNodeAndPruneChain(targetNodeForMenu);
         });
 
-        // --- [新功能] 全局键盘快捷键监听器 ---
-        document.addEventListener('keydown', (event) => {
-            // 复制快捷键
-            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
-                if (lastSelectedNode) {
-                    event.preventDefault();
-                    copyNodeInfo(lastSelectedNode);
-                }
+        // --- [新功能] 帮助弹框逻辑 ---
+        const helpButton = document.getElementById('help-button');
+        const helpModal = document.getElementById('help-modal');
+        const modalCloseBtn = helpModal.querySelector('.modal-close-btn');
+
+        function openModal() { helpModal.style.display = 'flex'; }
+        function closeModal() { helpModal.style.display = 'none'; }
+
+        helpButton.addEventListener('click', openModal);
+        modalCloseBtn.addEventListener('click', closeModal);
+        helpModal.addEventListener('click', (event) => {
+            if (event.target === helpModal) { // 点击灰色遮罩层时关闭
+                closeModal();
             }
+        });
 
-            // 删除快捷键
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeModal();
+            }
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'c') {
+                if (lastSelectedNode) { event.preventDefault(); copyNodeInfo(lastSelectedNode); }
+            }
             const isDeleteKey = event.key === 'Delete';
-            const isMacDelete = event.metaKey && event.key === 'Backspace'; // Cmd+Backspace on macOS
-
+            const isMacDelete = event.metaKey && event.key === 'Backspace';
             if (isDeleteKey || isMacDelete) {
-                if (lastSelectedNode) {
-                    event.preventDefault(); // 阻止浏览器默认行为 (如 Cmd+Backspace 的后退)
-                    deleteNodeAndPruneChain(lastSelectedNode);
-                }
+                if (lastSelectedNode) { event.preventDefault(); deleteNodeAndPruneChain(lastSelectedNode); }
             }
         });
 
