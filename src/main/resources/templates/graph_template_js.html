@@ -161,66 +161,54 @@
             contextMenu.style.display = 'block';
         });
 
-        cy.on('tap', () => { if (contextMenu.style.display === 'block') contextMenu.style.display = 'none'; });
+        // [优化] 点击画布空白处后，隐藏菜单并重置所有高亮状态
+        cy.on('tap', (evt) => {
+            if (evt.target === cy) { // 检查点击的是否为画布背景
+                contextMenu.style.display = 'none';
+                resetHighlight();
+            }
+        });
 
         deleteButton.addEventListener('click', () => {
             if (!targetNodeForMenu) return;
-
             contextMenu.style.display = 'none';
 
-            // --- 新的、精确的删除逻辑实现 ---
-
-            // 1. 初始化
             const nodesToPrune = cy.collection(targetNodeForMenu);
             let queue = [];
             let processedIds = new Set();
-
-            // 2. 向下游修剪 (BFS)
             queue.push(...targetNodeForMenu.outgoers().nodes());
             processedIds.add(targetNodeForMenu.id());
-
             while (queue.length > 0) {
                 const currentNode = queue.shift();
                 if (processedIds.has(currentNode.id())) continue;
                 processedIds.add(currentNode.id());
-
                 const parents = currentNode.incomers().nodes();
-
-                // 关键判断: 当前节点的所有父节点是否都已在待删除集合中
                 if (parents.every(p => nodesToPrune.has(p))) {
                     nodesToPrune.merge(currentNode);
                     queue.push(...currentNode.outgoers().nodes());
                 }
             }
-
-            // 3. 向上游修剪 (BFS)
-            queue = []; // 重置队列
-            processedIds.clear(); // 重置已处理集合
+            queue = [];
+            processedIds.clear();
             queue.push(...targetNodeForMenu.incomers().nodes());
             processedIds.add(targetNodeForMenu.id());
-
             while (queue.length > 0) {
                 const currentNode = queue.shift();
                 if (processedIds.has(currentNode.id())) continue;
                 processedIds.add(currentNode.id());
-
-                const children = currentNode.outgoers().nodes();
-
-                // 关键判断: 当前节点的所有子节点是否都已在待删除集合中
-                // 需处理自调用情况: 如果一个节点只调用自己，且自己将被删除，那它也应被删除。
-                const childrenToCheck = children.filter(c => c.id() !== currentNode.id());
-                if (childrenToCheck.every(c => nodesToPrune.has(c))) {
+                const children = currentNode.outgoers().nodes().filter(c => c.id() !== currentNode.id());
+                if (children.every(c => nodesToPrune.has(c))) {
                     nodesToPrune.merge(currentNode);
                     queue.push(...currentNode.incomers().nodes());
                 }
             }
 
-            // 4. 执行删除
             if (nodesToPrune.length > 0) {
-                console.log('Pruning nodes:', nodesToPrune.map(n => n.data('methodName')));
                 cy.remove(nodesToPrune);
             }
 
+            // [优化] 执行删除操作后，重置所有高亮状态
+            resetHighlight();
             targetNodeForMenu = null;
         });
 
