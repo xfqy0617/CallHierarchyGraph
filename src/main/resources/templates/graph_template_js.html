@@ -11,7 +11,7 @@
     <script src="https://unpkg.com/cytoscape-node-html-label@1.2.0/dist/cytoscape-node-html-label.min.js"></script>
 
     <style>
-        /* CSS样式部分保持不变，因为其类名已经具有足够的自解释性 */
+        /* CSS样式部分 */
         body, html {
             margin: 0; padding: 0; height: 100%;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -45,6 +45,33 @@
         #reset-button:hover { background-color: #5a6268; }
         #help-button { background-color: #ffc107; color: #212529; border-color: #e0a800; }
         #help-button:hover { background-color: #e0a800; }
+
+        /* --- 新增和修改的搜索框样式 --- */
+        .search-input-wrapper {position: relative;display: flex;flex-grow: 1;max-width: 500px;}
+        #search-scope-select { border-right: none; border-top-right-radius: 0; border-bottom-right-radius: 0; }
+        #search-input { flex-grow: 1; border-top-left-radius: 0; border-bottom-left-radius: 0; }
+        #autocomplete-suggestions {
+            display: none; position: absolute; top: 100%;
+            left: 0; right: 0; margin-top: 2px;
+            background: white; border: 1px solid #ced4da;
+            border-radius: 6px; max-height: 300px;
+            overflow-y: auto; z-index: 1001;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        .suggestion-item {
+            padding: 10px 15px; cursor: pointer;
+            border-bottom: 1px solid #f1f3f5;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .suggestion-item:last-child { border-bottom: none; }
+        .suggestion-item:hover { background-color: #f8f9fa; }
+        .suggestion-item .item-text { font-weight: 500; color: #212529; }
+        .suggestion-item .item-type {
+            font-size: 11px; color: #6c757d;
+            background-color: #e9ecef; padding: 2px 6px;
+            border-radius: 4px; text-transform: capitalize;
+        }
+        /* --- 结束：新增和修改的搜索框样式 --- */
 
         .node-card {
             font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
@@ -122,10 +149,20 @@
         <label for="layout-select">布局:</label>
         <select id="layout-select"><option value="dagre" selected>Dagre (Tree)</option><option value="breadthfirst">Breadthfirst</option><option value="circle">Circle</option><option value="grid">Grid</option></select>
     </div>
-    <div class="control-group">
+    <!-- *** MODIFIED: Search UI block *** -->
+    <div class="control-group"> <!-- 移除 search-container 类 -->
         <label for="search-input">查询:</label>
-        <input type="text" id="search-input" placeholder="查询类或方法...">
+        <div class="search-input-wrapper"> <!-- 新增: 输入字段的专属包装器 -->
+            <select id="search-scope-select">
+                <option value="all" selected>全部</option>
+                <option value="class">类</option>
+                <option value="method">方法</option>
+            </select>
+            <input type="text" id="search-input" placeholder="输入以进行模糊搜索..." autocomplete="off">
+            <div id="autocomplete-suggestions"></div>
+        </div>
     </div>
+    <!-- *** END MODIFIED *** -->
     <button id="reset-button">重置</button>
 </div>
 
@@ -203,6 +240,15 @@
             document.getElementById('cy').innerText = "错误：无法加载图表数据。";
             return;
         }
+
+        // *** NEW: Create a searchable data source from graph data ***
+        const searchableData = graphData.nodes.map(node => ({
+            id: node.id,
+            className: node.className.toLowerCase(),
+            methodName: node.methodName.toLowerCase(),
+            fullClassName: node.className,
+            fullMethodName: node.methodName,
+        }));
 
         // 创建 Cytoscape 实例，这是所有可视化操作的核心
         const cy = cytoscape({
@@ -350,6 +396,47 @@
             lastSelectedNode = null;
         }
 
+        // *** NEW: Search and Highlight Function ***
+        /**
+         * Finds all nodes matching the query and scope, then highlights their entire call chains.
+         * @param {string} query - The search term.
+         * @param {string} scope - 'all', 'class', or 'method'.
+         */
+        function executeSearchAndHighlight(query, scope) {
+            const lowerCaseQuery = query.toLowerCase().trim();
+            if (!lowerCaseQuery) {
+                resetHighlight();
+                return;
+            }
+
+            // 1. Find all nodes that match the search criteria.
+            const matchingNodes = cy.nodes().filter(node => {
+                const data = node.data();
+                const className = data.className.toLowerCase();
+                const methodName = data.methodName.toLowerCase();
+                switch(scope) {
+                    case 'class': return className.includes(lowerCaseQuery);
+                    case 'method': return methodName.includes(lowerCaseQuery);
+                    default: // 'all'
+                        return className.includes(lowerCaseQuery) || methodName.includes(lowerCaseQuery);
+                }
+            });
+
+            if (matchingNodes.length === 0) {
+                resetHighlight();
+                return;
+            }
+
+            // 2. For each matching node, get its full call chain (node + ancestors + successors).
+            let elementsToHighlight = cy.collection();
+            matchingNodes.forEach(node => {
+                const chain = node.union(node.predecessors()).union(node.successors());
+                elementsToHighlight = elementsToHighlight.union(chain);
+            });
+
+            // 3. Highlight the combined collection of all chains.
+            highlightElements(elementsToHighlight);
+        }
 
         // =========================================================================
         // === 3. 事件绑定 (Event Handling)
@@ -358,6 +445,10 @@
         // --- 全局变量，用于存储上下文状态 ---
         const contextMenu = document.getElementById('context-menu');
         const helpModal = document.getElementById('help-modal');
+        const searchInput = document.getElementById('search-input');
+        const searchScopeSelect = document.getElementById('search-scope-select');
+        const suggestionsContainer = document.getElementById('autocomplete-suggestions');
+
         let targetNodeForMenu = null; // 存储右键点击的节点
         let lastSelectedNode = null;  // 存储最后左键单击的节点
 
@@ -401,30 +492,114 @@
         // 帮助弹窗的显示与隐藏逻辑
         document.getElementById('help-button').addEventListener('click', () => { helpModal.style.display = 'flex'; });
         helpModal.querySelector('.modal-close-btn').addEventListener('click', () => { helpModal.style.display = 'none'; });
-        helpModal.addEventListener('click', (event) => { if (event.target === helpModal) helpModal.style.display = 'none'; });
 
         // 顶部控制栏的按钮和下拉框
-        document.getElementById('reset-button').addEventListener('click', () => { resetHighlight(); document.getElementById('search-input').value = ''; cy.fit(null, 50); });
+        document.getElementById('reset-button').addEventListener('click', () => {
+            resetHighlight();
+            searchInput.value = '';
+            suggestionsContainer.style.display = 'none';
+            cy.fit(null, 50);
+        });
         document.getElementById('layout-select').addEventListener('change', function () { cy.layout({ name: this.value, rankDir: 'LR', animate: true, spacingFactor: 1.5 }).run(); });
 
-        // 搜索框输入事件，带有300毫秒的防抖（debounce）处理，避免频繁触发搜索
-        let timeout;
-        document.getElementById('search-input').addEventListener('input', function() {
-            const query = this.value.toLowerCase().trim();
-            clearTimeout(timeout);
-            timeout = setTimeout(() => {
-                resetHighlight();
-                if (!query) return;
-                const searchResults = cy.nodes().filter(node =>
-                    node.data('className').toLowerCase().includes(query) ||
-                    node.data('methodName').toLowerCase().includes(query) ||
-                    node.data('packageName').toLowerCase().includes(query)
-                );
-                if (searchResults.length > 0) {
-                    highlightElements(searchResults);
+        // *** NEW: Autocomplete and Search Logic ***
+        function updateSuggestions() {
+            const query = searchInput.value.toLowerCase().trim();
+            const scope = searchScopeSelect.value;
+
+            if (!query) {
+                suggestionsContainer.innerHTML = '';
+                suggestionsContainer.style.display = 'none';
+                return;
+            }
+
+            // 1. 查找所有匹配的节点
+            const filteredNodes = searchableData.filter(item => {
+                switch(scope) {
+                    case 'class': return item.className.includes(query);
+                    case 'method': return item.methodName.includes(query);
+                    default: // 'all'
+                        return item.className.includes(query) || item.methodName.includes(query);
                 }
-            }, 300);
+            });
+
+            // 2. 收集所有可能的建议，并使用 Map 进行去重
+            const suggestionsMap = new Map();
+            filteredNodes.forEach(item => {
+                // 在'all'或'class'作用域下，如果类名匹配，添加类名建议
+                if ((scope === 'all' || scope === 'class') && item.className.includes(query)) {
+                    if (!suggestionsMap.has(item.fullClassName)) {
+                        suggestionsMap.set(item.fullClassName, { text: item.fullClassName, type: 'class' });
+                    }
+                }
+                // 在'all'或'method'作用域下，如果方法名匹配，添加方法名建议
+                if ((scope === 'all' || scope === 'method') && item.methodName.includes(query)) {
+                    if (!suggestionsMap.has(item.fullMethodName)) {
+                        suggestionsMap.set(item.fullMethodName, { text: item.fullMethodName, type: 'method' });
+                    }
+                }
+            });
+
+            // 3. 从 Map 中获取去重后的建议列表，并限制数量
+            const finalSuggestions = Array.from(suggestionsMap.values()).slice(0, 50);
+
+            if (finalSuggestions.length === 0) {
+                suggestionsContainer.innerHTML = '';
+                suggestionsContainer.style.display = 'none';
+                return;
+            }
+
+            // 4. 使用去重后的列表生成 HTML
+            suggestionsContainer.innerHTML = finalSuggestions.map(item => {
+                return `<div class="suggestion-item" data-text="${item.text}">
+                            <span class="item-text">${item.text}</span>
+                            <span class="item-type">${item.type}</span>
+                        </div>`;
+            }).join('');
+            suggestionsContainer.style.display = 'block';
+        }
+
+        searchInput.addEventListener('input', updateSuggestions);
+        searchInput.addEventListener('focus', updateSuggestions);
+
+        searchScopeSelect.addEventListener('change', () => {
+            // Re-evaluate suggestions when scope changes
+            updateSuggestions();
+            searchInput.focus();
         });
+
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                executeSearchAndHighlight(searchInput.value, searchScopeSelect.value);
+                suggestionsContainer.style.display = 'none';
+                searchInput.blur();
+            }
+        });
+
+        suggestionsContainer.addEventListener('click', (e) => {
+            const target = e.target.closest('.suggestion-item');
+            if (target) {
+                const text = target.getAttribute('data-text');
+                searchInput.value = text;
+                executeSearchAndHighlight(text, searchScopeSelect.value);
+                suggestionsContainer.style.display = 'none';
+            }
+        });
+
+        // Hide popups when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.search-input-wrapper')) {
+                suggestionsContainer.style.display = 'none';
+            }
+            if (!e.target.closest('.context-menu')) {
+                contextMenu.style.display = 'none';
+            }
+            if (e.target === helpModal) {
+                helpModal.style.display = 'none';
+            }
+        });
+
+
 
         // --- 全局键盘快捷键 ---
         document.addEventListener('keydown', (event) => {
@@ -442,7 +617,7 @@
             const isDeleteKey = event.key === 'Delete';
             const isMacDelete = event.metaKey && event.key === 'Backspace';
             // 确保焦点不在输入框内，以防误删
-            if ((isDeleteKey || isMacDelete) && document.activeElement.tagName !== 'INPUT') {
+            if ((isDeleteKey || isMacDelete) && !['INPUT', 'SELECT'].includes(document.activeElement.tagName)) {
                 if (lastSelectedNode) { event.preventDefault(); deleteNodeAndPruneChain(lastSelectedNode); }
             }
         });
