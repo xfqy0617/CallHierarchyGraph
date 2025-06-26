@@ -42,9 +42,6 @@ bin/
 .DS_Store
 
 .gradle/
-.idea/*
-!.idea/compiler.xml
-!.idea/gradle.xml
-!.idea/modules.xml
-.run/
+.idea
+.run
 build/
