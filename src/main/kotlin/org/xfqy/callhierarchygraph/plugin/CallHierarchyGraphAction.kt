@@ -223,11 +223,16 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") {
 
         val callingMethods = ApplicationManager.getApplication().runReadAction<List<PsiMethod>> {
             val searchScope = GlobalSearchScope.projectScope(project)
-            val references = ReferencesSearch.search(method, searchScope).findAll()
 
-            val allCallers = references
-                .mapNotNull { PsiTreeUtil.getParentOfType(it.element, PsiMethod::class.java) }
-                .distinct()
+            // 关键改动：创建一个包含当前方法及其所有超类/接口方法的列表
+            val methodsToSearch = mutableListOf(method)
+            methodsToSearch.addAll(method.findSuperMethods(true)) // 参数 true 表示进行深度查找
+
+            // 对列表中的每一个方法都进行引用搜索，并将结果合并
+            val allCallers = methodsToSearch.flatMap { m ->
+                ReferencesSearch.search(m, searchScope).findAll()
+                    .mapNotNull { ref -> PsiTreeUtil.getParentOfType(ref.element, PsiMethod::class.java) }
+            }.distinct() // 使用 distinct() 确保同一个调用方法只被计算一次
 
             if (scope == AnalysisScope.ALL) {
                 allCallers
@@ -290,7 +295,11 @@ class CallHierarchyGraphAction : AnAction("分析方法调用链...") {
             val params = method.parameterList.parameters.joinToString(", ") { it.type.presentableText }
             val packageName = (method.containingFile as? PsiJavaFile)?.packageName ?: (JavaDirectoryService.getInstance().getPackage(method.containingFile.containingDirectory!!)?.qualifiedName ?: "")
 
-            "$className.$methodName($params)  ($packageName)"
+            // 新增逻辑：判断是否为重写/实现方法
+            val isOverride = method.findSuperMethods().isNotEmpty()
+            val overrideMarker = if (isOverride) "[Override]" else "" // <-- 修改点
+
+            "$className.$methodName($params)  ($packageName)$overrideMarker"
         }
     }
 

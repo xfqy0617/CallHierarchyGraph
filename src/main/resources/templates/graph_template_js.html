@@ -82,7 +82,25 @@
             transition: opacity 0.4s ease, filter 0.4s ease, transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
         }
         .node-class-name { font-size: 18px; font-weight: bold; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 6px; }
-        .node-method-name { font-size: 14px; font-weight: 600; color: #00529b; margin-bottom: 4px; }
+        .node-method-name { font-size: 14px; font-weight: 600; color: #00529b; margin-bottom: 4px; display: flex; align-items: center; }
+        .override-icon {
+            display: inline-flex;
+            justify-content: center;
+            align-items: center;
+            min-width: 24px;
+            height: 16px;
+            border-radius: 4px;
+            background-color: #ffc107;
+            color: #343a40;
+            font-size: 9px;
+            font-weight: bold;
+            margin-right: 8px;
+            padding: 0 4px;
+            cursor: help;
+            border: 1px solid #e0a800;
+            line-height: 1;
+            box-sizing: border-box;
+        }
         .node-params, .node-package-name { font-size: 7px; color: #6c757d; line-height: 0.9; }
         .node-package-name { margin-top: 3px; border-top: 1px dashed #eee; padding-top: 3px; }
         .node-card.dimmed { opacity: 0.15; filter: grayscale(80%); }
@@ -178,46 +196,64 @@
 <div id="help-modal" class="modal-overlay">
     <div class="modal-content">
         <span class="modal-close-btn">×</span>
-        <h2>使用须知</h2>
+        <h2>🚀 Call Hierarchy Graph - 探索指南</h2>
+        <p>欢迎来到调用关系图的世界！这里不仅仅是代码的展示，更是一张可以让你自由探索、揭秘复杂业务逻辑的动态地图。为了让你更快上手，请收下这份探索指南。</p>
+
+        <h3>🗺️ 像探索地图一样导航</h3>
         <ul>
-            <li><strong>查看与导航:</strong>
-                <ul>
-                    <li>使用鼠标滚轮进行缩放。</li>
-                    <li>按住并拖动画布空白处进行平移。</li>
-                </ul>
+            <li><strong>缩放视图：</strong> 使用鼠标滚轮，轻松拉近或推远，获得宏观或微观的视角。</li>
+            <li><strong>平移画布：</strong> 在画布的任意空白处按住鼠标左键并拖动，自由探索图的每一个角落。</li>
+        </ul>
+
+        <h3>🎨 节点图例解读 (Node Legend)</h3>
+        <ul>
+            <li>
+                <span class="color-swatch" style="background-color: #e8f5e9; border-left: 5px solid #66bb6a;"></span>
+                <strong>叶节点 (Leaf / 起点):</strong> <br>
+                它们是调用链的“发动机”，是分析的起始点。在当前图中，它们只调用其他方法，不被任何方法调用。
             </li>
-            <li><strong>节点颜色说明:</strong>
-                <ul>
-                    <li><span class="color-swatch" style="background-color: #eceff1; border-left: 5px solid #b0bec5;"></span><strong>灰色 (Root):</strong> 调用链的<b>顶端</b>。在当前图中，它只被调用，不调用任何其他节点。</li>
-                    <li><span class="color-swatch" style="background-color: #e3f2fd; border-left: 5px solid #42a5f5;"></span><strong>蓝色 (Intermediate):</strong> 调用链的<b>中间节点</b>。它既调用其他方法，也被其他方法调用，是关系图的枢纽。</li>
-                    <li><span class="color-swatch" style="background-color: #e8f5e9; border-left: 5px solid #66bb6a;"></span><strong>绿色 (Leaf):</strong> 调用链的<b>末端</b>。在当前图中，它只发起调用，而不被任何节点调用，是分析的起点。</li>
-                </ul>
+            <li>
+                <span class="color-swatch" style="background-color: #e3f2fd; border-left: 5px solid #42a5f5;"></span>
+                <strong>中间节点 (Intermediate / 枢纽):</strong> <br>
+                它们是调用链的“交通枢纽”，承上启下，既调用也接受调用，是理解代码逻辑的关键。
             </li>
-            <li><strong>高亮调用链:</strong>
-                <ul>
-                    <li><strong>左键单击</strong>任意节点，即可高亮其完整的上游和下游调用链。</li>
-                </ul>
+            <li>
+                <span class="color-swatch" style="background-color: #eceff1; border-left: 5px solid #b0bec5;"></span>
+                <strong>根节点 (Root / 终点):</strong> <br>
+                它们是调用链的“最终目的地”。在当前图中，它们只被调用，不发起任何新的调用。
             </li>
-            <li><strong>复制节点信息:</strong>
-                <ul>
-                    <li><strong>左键单击</strong>选中节点后，按 <kbd>Cmd</kbd> + <kbd>C</kbd> (或 <kbd>Ctrl</kbd> + <kbd>C</kbd>)。</li>
-                    <li>或<strong>右键单击</strong>节点，在菜单中选择“复制”。</li>
-                </ul>
-            </li>
-            <li><strong>删除节点与修剪:</strong>
-                <ul>
-                    <li><strong>左键单击</strong>选中节点后，按 <kbd>Delete</kbd> 键 (或 <kbd>Cmd</kbd> + <kbd>Backspace</kbd>)。</li>
-                    <li>或<strong>右键单击</strong>节点，在菜单中选择“删除节点&修剪链路”。</li>
-                    <li>该操作会自动移除所有仅与被删除链路相关的“孤立”节点。</li>
-                </ul>
-            </li>
-            <li><strong>重置视图:</strong>
-                <ul>
-                    <li>点击画布任意空白处，可清除所有高亮状态。</li>
-                    <li>点击顶部的“重置”按钮，可清除高亮、清空搜索并使视图居中。</li>
-                </ul>
+            <li>
+                <span class="override-icon" style="cursor: default;">OVR</span>
+                <strong>重写标记 (Override):</strong> <br>
+                当看到这个标记时，请提高警惕！这表示该方法实现了某个接口或重写了父类方法。图上指向它的调用链可能来自于对接口的调用，您需要结合代码上下文进行甄别，这正是定位多态实现的关键线索！
             </li>
         </ul>
+
+        <h3>🛠️ 核心交互与效率利器</h3>
+        <ul>
+            <li>
+                <strong>一键聚焦调用链:</strong>
+                <strong>左键单击</strong>任意节点，整条相关的上下游链路会立刻高亮，其余部分则会淡化，让你瞬间聚焦核心逻辑。点击画布空白处即可取消。
+            </li>
+            <li>
+                <strong>智能查询与定位:</strong>
+                使用顶部的搜索框，可以按“类名”或“方法名”进行模糊搜索。智能的自动补全会为您提供建议。选中建议或按下<kbd>Enter</kbd>，所有匹配节点的调用链都会被高亮。
+            </li>
+            <li>
+                <strong>复制完整方法名:</strong>
+                <strong>右键单击</strong>节点选择“复制”，或选中节点后按 <kbd>Cmd/Ctrl</kbd> + <kbd>C</kbd>，即可快速复制方法的标准全限定名 (如 `package.Class#method`)，方便您进行全局搜索或文档编写。
+            </li>
+            <li>
+                <strong>删除节点并智能修剪:</strong>
+                <strong>右键单击</strong>节点选择“删除”，或选中节点后按 <kbd>Delete</kbd> / <kbd>Backspace</kbd>。插件不仅会移除该节点，更会自动“修剪”掉所有仅因它而存在的、现已孤立的调用分支，让图表保持整洁。
+            </li>
+            <li>
+                <strong>一键重置:</strong>
+                点击顶部的“重置”按钮，所有高亮、搜索和缩放都将恢复到初始状态，让你可以从头开始新的探索。
+            </li>
+        </ul>
+        <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+        <p style="text-align: center; font-style: italic; color: #6c757d;">祝您探索愉快！</p>
     </div>
 </div>
 
@@ -289,8 +325,14 @@
                         default: borderStyle = 'border-left: 5px solid #42a5f5;'; bgColor = '#e3f2fd'; break;
                     }
                     const finalStyle = `${borderStyle} background-color: ${bgColor};`;
-                    // 返回最终的HTML字符串模板
-                    return `<div id="card-${data.id}" class="node-card" style="${finalStyle}"><div class="copy-feedback">Copied!</div><div class="node-class-name" style="color: ${data.classColor};" title="${data.className}">${data.className}</div><div class="node-method-name" title="${data.methodName}">${data.methodName}</div><div class="node-params" title="${data.params}">(${data.params})</div><div class="node-package-name" title="${data.packageName}">${data.packageName}</div></div>`;
+
+                    // 新增：根据 isOverride 字段决定是否显示重写图标
+                    const overrideIconHtml = data.isOverride
+                        ? `<span class="override-icon" title="[Override] 此方法重写或实现了父类/接口的方法。图上显示的调用关系可能源自对接口或父类的调用，需要您结合代码上下文进行甄别。">OVR</span>`
+                        : '';
+
+                    // 返回最终的HTML字符串模板，将图标放在方法名前
+                    return `<div id="card-${data.id}" class="node-card" style="${finalStyle}"><div class="copy-feedback">Copied!</div><div class="node-class-name" style="color: ${data.classColor};" title="${data.className}">${data.className}</div><div class="node-method-name">${overrideIconHtml}<span title="${data.methodName}">${data.methodName}</span></div><div class="node-params" title="${data.params}">(${data.params})</div><div class="node-package-name" title="${data.packageName}">${data.packageName}</div></div>`;
                 }
             }
         ]);

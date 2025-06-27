@@ -4,8 +4,7 @@ import org.xfqy.callhierarchygraph.model.NodeData
 import org.xfqy.callhierarchygraph.util.DistinctDarkColorGenerator
 import org.xfqy.callhierarchygraph.util.Pair
 
-private val LABEL_PATTERN_KOTLIN: Regex = "^(.+?)\\.([a-zA-Z0-9_<>\$]+)\\((.*?)\\)(?:\\s*\\(\\s*(\\d+)\\s+usages\\s*\\))?\\s+\\(([a-zA-Z0-9_.]+)\\)\$".toRegex()
-
+private val LABEL_PATTERN_KOTLIN: Regex = "^(.+?)\\.([a-zA-Z0-9_<>\$]+)\\((.*?)\\)(?:\\s*\\(\\s*(\\d+)\\s+usages\\s*\\))?\\s+\\(([a-zA-Z0-9_.]+)\\)(\\[Override\\])?\$".toRegex()
 class NodeManager {
     // 完整节点内容 -> 唯一节点ID
     private val nodeContentToIdMap: MutableMap<String, String> = HashMap()
@@ -37,11 +36,11 @@ class NodeManager {
                 packageName = nodeInfo.packageName,
                 classColor = getClassColor(nodeInfo.className),
                 isEntry = isEntry,
-                nodeType = "" // 初始为空，由 Action 在最后统一计算
+                nodeType = "", // 初始为空，由 Action 在最后统一计算
+                isOverride = nodeInfo.isOverride // <-- 新增赋值
             )
         }
 
-        // 如果一个已存在的节点被重新标记为入口点，更新它
         if (isEntry && !nodeData.isEntry) {
             nodeDataMap[uniqueId] = nodeData.copy(isEntry = true)
         }
@@ -63,21 +62,24 @@ class NodeManager {
         val funName: String,
         val param: String,
         val packageName: String,
+        val isOverride: Boolean // <-- 新增字段
     ) {
         companion object {
             fun from(fullNodeContent: String): NodeInfo {
                 val matchResult = LABEL_PATTERN_KOTLIN.find(fullNodeContent)
                 if (matchResult != null) {
-                    val (rawClassName, rawFunName, rawParam, _, rawPackageName) = matchResult.destructured
+                    // 更新解构以包含新的捕获组
+                    val (rawClassName, rawFunName, rawParam, _, rawPackageName, overrideMarker) = matchResult.destructured
                     return NodeInfo(
                         rawClassName.trim(),
                         rawFunName.trim(),
                         htmlEscaped(rawParam.trim()),
-                        rawPackageName.trim()
+                        rawPackageName.trim(),
+                        isOverride = overrideMarker.isNotEmpty() // 如果标记存在，则isOverride为true
                     )
                 } else {
                     System.err.println("无法解析节点内容: $fullNodeContent")
-                    return NodeInfo("UnknownClass", fullNodeContent, "", "unknown.package")
+                    return NodeInfo("UnknownClass", fullNodeContent, "", "unknown.package", false)
                 }
             }
 
