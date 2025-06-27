@@ -537,11 +537,26 @@
 
         // 顶部控制栏的按钮和下拉框
         document.getElementById('reset-button').addEventListener('click', () => {
+            // 清除高亮和搜索状态
             resetHighlight();
             searchInput.value = '';
             suggestionsContainer.style.display = 'none';
-            cy.fit(null, 50);
+
+            // 获取当前布局选择框中的值
+            const selectedLayout = document.getElementById('layout-select').value;
+
+            // 重新运行布局算法
+            cy.layout({
+                name: selectedLayout,
+                rankDir: 'LR',          // 'dagre' 布局需要此参数
+                spacingFactor: 1.5,     // 保持布局间距一致
+                animate: true,          // 使用平滑的动画效果
+                animationDuration: 500, // 动画持续时间
+                fit: true,              // 布局运行后自动缩放以适应视口
+                padding: 50             // 视图边缘的填充
+            }).run();
         });
+
         document.getElementById('layout-select').addEventListener('change', function () { cy.layout({ name: this.value, rankDir: 'LR', animate: true, spacingFactor: 1.5 }).run(); });
 
         // *** NEW: Autocomplete and Search Logic ***
