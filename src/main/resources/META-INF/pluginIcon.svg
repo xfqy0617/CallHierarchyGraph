@@ -1,12 +1,40 @@
-<svg width="40" height="40" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M32.0845 7.94025V4H24.0203V7.9896H16.029V4H7.91553V7.94025H4V36H16.0044V32.0045C16.0058 30.9457 16.4274 29.9308 17.1766 29.1826C17.9258 28.4345 18.9412 28.0143 20 28.0143C21.0588 28.0143 22.0743 28.4345 22.8234 29.1826C23.5726 29.9308 23.9942 30.9457 23.9956 32.0045V36H36V7.94025H32.0845Z"
-          fill="url(#paint0_linear)"/>
+<svg width="128" height="128" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"
+     aria-labelledby="logoTitle" role="img">
+
+    <title id="logoTitle">Call Hierarchy Graph Plugin Icon</title>
+
+    <!-- 定义全局渐变色: 蓝 -> 绿 -> 紫 -->
     <defs>
-        <linearGradient id="paint0_linear" x1="2.94192" y1="4.89955" x2="37.7772" y2="39.7345"
+        <linearGradient id="global-gradient" x1="0%" y1="0%" x2="100%" y2="100%"
                         gradientUnits="userSpaceOnUse">
-            <stop offset="0.15937" stop-color="#3BEA62"/>
-            <stop offset="0.5404" stop-color="#3C99CC"/>
-            <stop offset="0.93739" stop-color="#6B57FF"/>
+            <stop offset="0%" style="stop-color: #4A90E2;"/>      <!-- 鲜亮的蓝色 -->
+            <stop offset="50%" style="stop-color: #50E3C2;"/>     <!-- 充满活力的绿色/青色 -->
+            <stop offset="100%" style="stop-color: #9013FE;"/>    <!-- 深邃的紫色 -->
         </linearGradient>
     </defs>
+
+    <!--
+        绘制图形元素
+        所有元素都使用同一个 `url(#global-gradient)` 来填充或描边,
+        从而实现 "全局渐变" 的效果。
+    -->
+    <g stroke-linecap="round" stroke-linejoin="round">
+
+        <!-- 左侧的起始节点 (调用者) -->
+        <circle cx="25" cy="50" r="12" fill="url(#global-gradient)"/>
+
+        <!-- 右上方的目标节点 (被调用者1) -->
+        <circle cx="75" cy="28" r="12" fill="url(#global-gradient)"/>
+
+        <!-- 右下方的目标节点 (被调用者2) -->
+        <circle cx="75" cy="72" r="12" fill="url(#global-gradient)"/>
+
+        <!-- 连接起始节点与目标节点1的平滑曲线 -->
+        <path d="M 37 50 C 45 50, 55 35, 63 30"
+              stroke="url(#global-gradient)" stroke-width="5" fill="none"/>
+
+        <!-- 连接起始节点与目标节点2的平滑曲线 -->
+        <path d="M 37 50 C 45 50, 55 65, 63 70"
+              stroke="url(#global-gradient)" stroke-width="5" fill="none"/>
+    </g>
 </svg>
