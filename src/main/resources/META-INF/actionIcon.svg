@@ -1,0 +1,36 @@
+<svg width="16" height="16" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg">
+    <title>Call Hierarchy Action Icon (Gradient Experiment)</title>
+
+    <!--
+        定义渐变色。
+        注意：IDE的UI系统很可能会忽略这个定义，并强制使用主题颜色。
+    -->
+    <defs>
+        <linearGradient id="action-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color: #4A90E2;"/>
+            <stop offset="50%" style="stop-color: #50E3C2;"/>
+            <stop offset="100%" style="stop-color: #9013FE;"/>
+        </linearGradient>
+    </defs>
+
+    <!--
+        绘制图形元素，并尝试使用我们定义的渐变色进行填充和描边。
+    -->
+    <g stroke-linecap="round">
+        <!-- 左侧的起始节点 -->
+        <circle cx="4" cy="8" r="2.5" fill="url(#action-gradient)"/>
+
+        <!-- 右上方的目标节点 -->
+        <circle cx="12" cy="4.5" r="2.5" fill="url(#action-gradient)"/>
+
+        <!-- 右下方的目标节点 -->
+        <circle cx="12" cy="11.5" r="2.5" fill="url(#action-gradient)"/>
+
+        <!-- 连接线 -->
+        <path d="M 6.5,8 C 7.5,8 9.5,6.5 10.2,5.5"
+              stroke="url(#action-gradient)" stroke-width="1.2" fill="none"/>
+
+        <path d="M 6.5,8 C 7.5,8 9.5,9.5 10.2,10.5"
+              stroke="url(#action-gradient)" stroke-width="1.2" fill="none"/>
+    </g>
+</svg>
